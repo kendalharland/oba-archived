@@ -9,7 +9,7 @@ all: $(PROJECTS)
 
 oba:
 	@echo "==== Building oba ===="
-	$(CC) $(ALL_CFLAGS) ./src/main.c
+	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*
 
 clean:
 	rm -rf $(TARGET)
