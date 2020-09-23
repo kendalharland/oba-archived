@@ -1,4 +1,5 @@
-#include "oba_vm.h"
+#ifndef oba_token_h
+#define oba_token_h
 
 typedef enum {
 	TOK_LPAREN,
@@ -28,3 +29,5 @@ typedef struct {
   // TODO(kendal): Define this instead of using 'int'.
   int value;
 } Token;
+
+#endif
