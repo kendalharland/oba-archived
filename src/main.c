@@ -8,8 +8,22 @@
 #define VERSION "0.0"
 #define PROMPT  ">> "
 
-char* read(void) {
+#define RL_BUFSIZE 1024
 
+char* read(void) {
+  char *line = NULL;
+  ssize_t bufsize = 0; // have getline allocate a buffer for us
+
+  if (getline(&line, &bufsize, stdin) == -1){
+    if (feof(stdin)) {
+      exit(EXIT_SUCCESS);  // We recieved an EOF
+    } else  {
+      perror("read");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  return line;
 }
 
 int eval(char* input) {}
