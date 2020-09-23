@@ -4,26 +4,35 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-char* read_line(void) {
+#define NAME    "oba"
+#define VERSION "0.0"
+#define PROMPT  ">> "
+
+char* read(void) {
 
 }
 
-int eval_line(char* line) {}
+int eval(char* input) {}
 
 
 void repl(void) {
-	char *line;
+	char *input;
 	int status;
 
 	do {
-		printf("> ");
-		line = read_line(); // Line may not be a complete expr?
-		status = eval_line(line);
-		free(line);
+		printf(PROMPT);
+		input = read(); 
+		status = eval(input);
+		free(input);
 	} while (status);
 }
 
+void welcome(void) {
+	printf("%s %s\n", NAME, VERSION);
+}
+
 int main(int argc, char **argv) {
+	welcome();
 	repl();
 	return EXIT_SUCCESS;
 }
