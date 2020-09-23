@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <oba.h>
+
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
