@@ -16,7 +16,7 @@ char* read(void) {
 
   if (getline(&line, &bufsize, stdin) == -1){
     if (feof(stdin)) {
-      exit(EXIT_SUCCESS);  // We recieved an EOF
+      return NULL; 
     } else  {
       perror("read");
       exit(EXIT_FAILURE);
@@ -38,7 +38,9 @@ void repl(void) {
 		input = read(); 
 		status = eval(input);
 		free(input);
-	} while (status);
+	} while (!feof(stdin));
+
+	printf("exiting. \n");
 }
 
 void welcome(void) {
