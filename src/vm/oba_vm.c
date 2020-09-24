@@ -12,10 +12,12 @@ ObaVM* obaNewVM() {
 }
 
 void obaFreeVM(ObaVM* vm) {
-	
+	free(vm);
+	vm = NULL;
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
+	obaCompile(vm, source);
 	return OBA_RESULT_SUCCESS;
 }
 

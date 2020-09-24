@@ -6,10 +6,12 @@ typedef enum {
 	TOK_RPAREN,
 
 	TOK_IDENT,
-	
+		
 	// A String literal.
 	TOK_STRING,
+	TOK_NEWLINE,
 
+	TOK_ERROR,
 	TOK_EOF,
 } TokenType;
 
