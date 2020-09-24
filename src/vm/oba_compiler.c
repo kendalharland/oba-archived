@@ -12,6 +12,10 @@ typedef struct {
 	Token current;
 	Token previous;
 	
+	// Whether the parser encountered an error.
+	// Code is not executed if this is the case.
+	bool hasError;
+
 	const char* tokenStart;
 	const char* currentChar;
 	const char* source;
@@ -32,6 +36,8 @@ static void printError(Parser* parser, int line, const char* label,
 }
 
 static void lexError(Parser* parser, const char* format, ...) {
+	parser->hasError = true;
+
 	va_list args;
 	va_start(args, format);
 	printError(parser, parser->currentLine, "Error", format, args);
@@ -150,6 +156,7 @@ int obaCompile(ObaVM* vm, const char *source) {
   parser.current.length = 0;
   parser.current.line = 0;
   // TODO(kendal): parser.current.value
+  parser.hasError = false;
 
   // Read the first token. (Why?)
   nextToken(&parser);
