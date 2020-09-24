@@ -6,11 +6,7 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-#define NAME    "oba"
-#define VERSION "0.0"
 #define PROMPT  ">> "
-
-#define RL_BUFSIZE 1024
 
 char* read(void) {
   char *line = NULL;
@@ -28,30 +24,32 @@ char* read(void) {
   return line;
 }
 
-int eval(char* input) {
+ObaInterpretResult interpret(char* input) {
 	// TODO(kendal): the repl should use the same VM each time.
 	ObaVM* vm = obaNewVM();
 	ObaInterpretResult result = obaInterpret(vm, input);
 	obaFreeVM(vm);	
+	return result;
 }
 
 
 void repl(void) {
 	char *input;
-	int status;
+	ObaInterpretResult result;
 
 	do {
 		printf(PROMPT);
 		input = read(); 
-		status = eval(input);
-		free(input);
+		result = interpret(input);
+		if (input != NULL) free(input);
 	} while (!feof(stdin));
 
 	printf("exiting. \n");
 }
 
 void welcome(void) {
-	printf("%s %s\n", NAME, VERSION);
+	printf("oba %s\n", OBA_VERSION_STRING);
+	printf("Press ctrl+d to exit\n");
 }
 
 int main(int argc, char **argv) {

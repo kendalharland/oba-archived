@@ -1,6 +1,8 @@
 #ifndef oba_h
 #define oba_h
 
+#define OBA_VERSION_STRING "0.0.1"
+
 // Public APIs for the Oba language -------------------------------------------
 
 typedef enum {
