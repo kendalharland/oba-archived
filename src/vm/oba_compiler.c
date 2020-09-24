@@ -38,6 +38,25 @@ static void lexError(Parser* parser, const char* format, ...) {
 	va_end(args);
 }
 
+static void printTokenType(TokenType type) {
+	switch (type) {
+		case TOK_LPAREN:
+		       	printf("TOK_LPAREN");  
+			break;
+		case TOK_RPAREN:
+		       	printf("TOK_RPAREN");
+			break;
+		case TOK_EOF:
+		       	printf("TOK_EOF");
+			break;
+		case TOK_NEWLINE:
+		       	printf("TOK_NEWLINE");
+			break;
+		default:
+	             printf("TOK_ERROR");	  
+	}
+}
+
 // Parsing --------------------------------------------------------------------
 
 static char peekChar(Parser* parser) {
@@ -139,7 +158,9 @@ int obaCompile(ObaVM* vm, const char *source) {
   initCompiler(&compiler, &parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
+	printTokenType(compiler.parser->current.type);
 	nextToken(compiler.parser);
+	printf("\n");
   }
 
   return 0;
