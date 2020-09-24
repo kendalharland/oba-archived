@@ -28,8 +28,12 @@ char* read(void) {
   return line;
 }
 
-// TODO(kendal): Support calling the compiler.
-int eval(char* input) {}
+int eval(char* input) {
+	// TODO(kendal): the repl should use the same VM each time.
+	ObaVM* vm = obaNewVM();
+	ObaInterpretResult result = obaInterpret(vm, input);
+	obaFreeVM(vm);	
+}
 
 
 void repl(void) {
