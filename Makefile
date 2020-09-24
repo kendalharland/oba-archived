@@ -16,7 +16,11 @@ format:
 	find . -regex '.*\.\(c\|h\)' -exec clang-format -style=file -i {} \;
 
 clean:
+	@echo "=== Removing oba ===="
 	rm -rf $(TARGET)
+
+run: clean oba
+	./oba
 
 help:
 	@echo "Usage: make [target]"
@@ -24,6 +28,9 @@ help:
 	@echo "TARGETS:"
 	@echo "   all (default)"
 	@echo "   oba"
+	@echo "   run"
+	@echo "   format"
+	@echo "   clean"
 	@echo ""
 	@echo "For more information, see https://github.com/premake/premake-core/wiki"
 

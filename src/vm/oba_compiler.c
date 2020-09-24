@@ -13,7 +13,7 @@ typedef struct {
   Token previous;
 
   // Whether the parser encountered an error.
-  // Code is not executed if this is the case.
+  // Code is not executed if this is true.
   bool hasError;
 
   const char* tokenStart;
@@ -22,6 +22,56 @@ typedef struct {
 
   int currentLine;
 } Parser;
+
+
+// Grammar --------------------------------------------------------------------
+
+typedef enum {
+  PREC_NONE,
+  PREC_LOWEST,
+  PREC_TERM, // + -
+} Precedence;
+
+// TODO(kendal): Replace this with the appropriate type.
+typedef void Signature;
+
+typedef void (*GrammarFn)(Parser*, bool canAssign);
+typedef void (*SignatureFn)(Compiler* compiler, Signature* signature);
+
+typedef struct {
+  GrammarFn prefix;
+  GrammarFn infix;
+  SignatureFn method;
+  Precedence precedence;
+  const char* name;
+} GrammarRule;
+
+// clang-format off
+
+// Pratt parser rules.
+//
+// See: http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
+#define UNUSED                     { NULL, NULL, NULL, PREC_NONE, NULL }
+#define PREFIX(fn)                 { fn, NULL, NULL, PREC_NONE, NULL }
+#define INFIX(prec, fn)            { NULL, fn, NULL, prec, NULL }
+#define INFIX_OPERATOR(prec, name) { NULL, infixOp, infixSignature, prec, name }
+#define PREFIX_OPERATOR(name)      { unaryOp, NULL, unarySignature, PREC_NONE, name }
+#define OPERATOR(name)             { unaryOp, infixOp, mixedSignature, PREC_TERM, name }
+
+// Forward declarations.
+static void grouping(Parser*, bool);
+
+GrammarRule rules[] =  {
+  /* TOK_LPAREN  */ PREFIX(grouping),  
+  /* TOK_RPAREN  */ UNUSED, 
+  /* TOK_IDENT   */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_STRING  */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_NEWLINE */ UNUSED, 
+  /* TOK_ERROR   */ UNUSED,  
+  /* TOK_EOF     */ UNUSED,
+};
+
+// clang-format on
 
 // Lexing ---------------------------------------------------------------------
 
@@ -36,6 +86,20 @@ static void printError(Parser* parser, int line, const char* label,
 
 static void lexError(Parser* parser, const char* format, ...) {
   parser->hasError = true;
+
+  va_list args;
+  va_start(args, format);
+  printError(parser, parser->currentLine, "Error", format, args);
+  va_end(args);
+}
+
+static void error(Parser* parser, const char* format, ...) {
+  parser->hasError = true;
+
+  // The lexer already reported this error.
+  if (parser->previous.type == TOK_ERROR)
+    ;
+  return;
 
   va_list args;
   va_start(args, format);
@@ -128,6 +192,29 @@ static bool match(Parser* parser, TokenType expected) {
   return true;
 }
 
+static void consume(Parser* parser, TokenType expected,
+                    const char* errorMessage) {
+  nextToken(parser);
+  if (parser->previous.type != expected) {
+    error(parser, errorMessage);
+    if (parser->current.type == expected) {
+      nextToken(parser);
+    }
+  }
+}
+
+// AST ------------------------------------------------------------------------
+
+static void expression(Parser* parser) {
+  // TODO(kendal): Implement.
+}
+
+// A parenthesized expression.
+static void grouping(Parser* parser, bool canAssign) {
+  expression(parser);
+  consume(parser, TOK_RPAREN, "Expected ')' after expression.");
+}
+
 // Compiling ------------------------------------------------------------------
 
 struct sCompiler {
@@ -166,7 +253,7 @@ int obaCompile(ObaVM* vm, const char* source) {
 
   while (!match(compiler.parser, TOK_EOF)) {
     printTokenType(compiler.parser->current.type);
-    nextToken(compiler.parser);
+    grouping(compiler.parser, true);
     printf("\n");
   }
 
