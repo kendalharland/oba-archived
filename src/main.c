@@ -28,6 +28,7 @@ char* read(void) {
   return line;
 }
 
+// TODO(kendal): Support calling the compiler.
 int eval(char* input) {}
 
 

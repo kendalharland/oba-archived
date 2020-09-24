@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "oba_compiler.h"
@@ -10,6 +11,12 @@
 typedef struct {
 	ObaVM* vm;
 	Token current;
+	Token previous;
+	
+	const char* tokenStart;
+	const char* currentChar;
+
+	int currentLine;
 } Parser;
 
 // Returns the type of the current token.
@@ -17,8 +24,46 @@ static TokenType peek(Parser* parser) {
   return parser->current.type;
 }
 
+static char peekChar(Parser* parser) {
+	return *parser->currentChar;
+}
+
+static char nextChar(Parser* parser) {
+	char c = peekChar(parser);
+	parser->currentChar++;
+	if (c == '\n') parser->currentLine++;
+	return c;
+}
+
 // Lexes the next token and stores it in [parser.current].
-static void nextToken(Parser* parser) {}
+static void nextToken(Parser* parser) {
+	parser->previous = parser->current;
+
+	if (parser->current.type == TOK_EOF) return;
+
+	// TODO(kendal): Delete and actually update the token on parser.
+	Token token;
+	parser->current = token;
+
+	while(peekChar(parser) != '\0') {
+		parser->tokenStart = parser->currentChar;
+		char c = nextChar(parser);
+		switch(c) {
+			case '(':
+				printf("got (");
+				return;
+			case ')':
+				printf("got )");
+				return;
+			case '\n':
+				printf("got newline");
+				return;
+			default:
+				printf("got unkown char");
+				return;
+		}
+	}
+}
 
 static bool match(Parser* parser, TokenType expected) {
   if (peek(parser) != expected) return false;
@@ -47,7 +92,7 @@ int obaCompile(ObaVM* vm, const char *source) {
   initCompiler(&compiler, &parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
-
+	nextToken(compiler.parser);
   }
 
   return 0;
