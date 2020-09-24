@@ -6,9 +6,9 @@
 // Public APIs for the Oba language -------------------------------------------
 
 typedef enum {
-	OBA_RESULT_SUCCESS,
-	OBA_RESULT_COMPILE_ERROR,
-	OBA_RESULT_RUNTIME_ERROR
+  OBA_RESULT_SUCCESS,
+  OBA_RESULT_COMPILE_ERROR,
+  OBA_RESULT_RUNTIME_ERROR
 } ObaInterpretResult;
 
 // A single virtual machine for execute Oba code.

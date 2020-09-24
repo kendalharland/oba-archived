@@ -6,6 +6,6 @@
 typedef struct sCompiler Compiler;
 
 // Compiles [source], a string of Oba source code.
-int obaCompile(ObaVM* vm, const char *source);
+int obaCompile(ObaVM* vm, const char* source);
 
 #endif

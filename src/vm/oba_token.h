@@ -2,22 +2,22 @@
 #define oba_token_h
 
 typedef enum {
-	TOK_LPAREN,
-	TOK_RPAREN,
+  TOK_LPAREN,
+  TOK_RPAREN,
 
-	TOK_IDENT,
-		
-	// A String literal.
-	TOK_STRING,
-	TOK_NEWLINE,
+  TOK_IDENT,
 
-	TOK_ERROR,
-	TOK_EOF,
+  // A String literal.
+  TOK_STRING,
+  TOK_NEWLINE,
+
+  TOK_ERROR,
+  TOK_EOF,
 } TokenType;
 
 typedef struct {
   TokenType type;
-  
+
   // The beginning of the token, pointing directly at the source.
   const char* start;
 
@@ -26,7 +26,7 @@ typedef struct {
 
   // The 1-based line where the token appears.
   int line;
-  
+
   // The parsed value if the token is a literal.
   // TODO(kendal): Define this instead of using 'int'.
   int value;

@@ -11,6 +11,10 @@ oba:
 	@echo "==== Building oba ===="
 	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*
 
+format:
+	@echo "==== Formatting oba source code ===="
+	find . -regex '.*\.\(c\|h\)' -exec clang-format -style=file -i {} \;
+
 clean:
 	rm -rf $(TARGET)
 
