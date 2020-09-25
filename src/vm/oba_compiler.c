@@ -1,6 +1,8 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "oba_compiler.h"
@@ -68,11 +70,13 @@ typedef struct {
 
 // Forward declarations.
 static void grouping(Parser*, bool);
+static void literal(Parser*, bool);
 
 GrammarRule rules[] =  {
   /* TOK_LPAREN  */ PREFIX(grouping),  
   /* TOK_RPAREN  */ UNUSED, 
   /* TOK_IDENT   */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_NUMBER  */ PREFIX(literal),
   /* TOK_STRING  */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NEWLINE */ UNUSED, 
   /* TOK_ERROR   */ UNUSED,  
@@ -160,6 +164,17 @@ static void makeToken(Parser* parser, TokenType type) {
     parser->current.line--;
 }
 
+static bool isIdent(char c) { return isalpha(c) || c == '_'; }
+
+// Finishes lexing an identifier.
+static void readIdent(Parser* parser) {
+  while (isIdent(peekChar(parser)) || isdigit(peekChar(parser))) {
+    nextChar(parser);
+  }
+  makeToken(parser, TOK_IDENT);
+  // TODO(kendal): Handle keywords.
+}
+
 // Lexes the next token and stores it in [parser.current].
 static void nextToken(Parser* parser) {
   parser->previous = parser->current;
@@ -181,6 +196,10 @@ static void nextToken(Parser* parser) {
       makeToken(parser, TOK_NEWLINE);
       return;
     default:
+      if (isIdent(c)) {
+        readIdent(parser);
+        return;
+      }
       lexError(parser, "Invalid character '%c'.", c);
       parser->current.type = TOK_ERROR;
       parser->current.length = 0;
@@ -243,6 +262,11 @@ static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
 static void grouping(Parser* parser, bool canAssign) {
   expression(parser);
   consume(parser, TOK_RPAREN, "Expected ')' after expression.");
+}
+
+static void literal(Parser* parser, bool canAssign) {
+  perror("unimplemented: literal");
+  exit(1);
 }
 
 // Compiling ------------------------------------------------------------------

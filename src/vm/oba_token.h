@@ -6,6 +6,7 @@ typedef enum {
   TOK_RPAREN,
 
   TOK_IDENT,
+  TOK_NUMBER,
 
   // A String literal.
   TOK_STRING,
