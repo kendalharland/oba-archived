@@ -23,7 +23,6 @@ typedef struct {
   int currentLine;
 } Parser;
 
-
 // Grammar --------------------------------------------------------------------
 
 typedef enum {
@@ -36,15 +35,19 @@ typedef enum {
 typedef void Signature;
 
 typedef void (*GrammarFn)(Parser*, bool canAssign);
-typedef void (*SignatureFn)(Compiler* compiler, Signature* signature);
+typedef void (*SignatureFn)(Parser* parser, Signature* signature);
 
-// GrammarRules.
-// 
+// Oba grammar rules.
+//
 // The Pratt parser tutorial at stuffwithstuff describes these as "Parselets".
 // The difference between this implementation and parselets is that the prefix
 // and infix parselets for the same token are stored on this one struct instead
 // in separate tables. This means the same rule implements different operations
 // that share the same lexeme.
+//
+// Additionally, our parser stores tokens internally, so GrammarFn does not
+// accept the previous token as an argument, it accesses it using
+// parser->previous.
 typedef struct {
   GrammarFn prefix;
   GrammarFn infix;
@@ -60,9 +63,7 @@ typedef struct {
 // See: http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
 #define UNUSED                     { NULL, NULL, NULL, PREC_NONE, NULL }
 #define PREFIX(fn)                 { fn, NULL, NULL, PREC_NONE, NULL }
-#define INFIX(prec, fn)            { NULL, fn, NULL, prec, NULL }
 #define INFIX_OPERATOR(prec, name) { NULL, infixOp, infixSignature, prec, name }
-#define PREFIX_OPERATOR(name)      { unaryOp, NULL, unarySignature, PREC_NONE, name }
 #define OPERATOR(name)             { unaryOp, infixOp, mixedSignature, PREC_TERM, name }
 
 // Forward declarations.
@@ -217,29 +218,26 @@ static void consume(Parser* parser, TokenType expected,
 // AST ------------------------------------------------------------------------
 
 static void parse(Parser* parser, int precedence) {
-	nextToken(parser);
-	Token token = parser->current;
+  nextToken(parser);
+  Token token = parser->current;
 
-	GrammarFn prefix =  rules[token.type].prefix;
-	if (prefix == NULL) {
-		error(parser, "Parse error"); 
-		return;
-	}
+  GrammarFn prefix = rules[token.type].prefix;
+  if (prefix == NULL) {
+    error(parser, "Parse error");
+    return;
+  }
 
-	bool canAssign = false;
-	prefix(parser, canAssign);
-	
-	while (precedence < rules[parser->current.type].precedence) {
-		nextToken(parser);
-		GrammarFn infix = rules[parser->previous.type].infix;
-		infix(parser, canAssign);
-	}
+  bool canAssign = false;
+  prefix(parser, canAssign);
+
+  while (precedence < rules[parser->current.type].precedence) {
+    nextToken(parser);
+    GrammarFn infix = rules[parser->previous.type].infix;
+    infix(parser, canAssign);
+  }
 }
 
-
-static void expression(Parser* parser) {
-  // TODO(kendal): Implement.
-}
+static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
 
 // A parenthesized expression.
 static void grouping(Parser* parser, bool canAssign) {
