@@ -38,6 +38,13 @@ typedef void Signature;
 typedef void (*GrammarFn)(Parser*, bool canAssign);
 typedef void (*SignatureFn)(Compiler* compiler, Signature* signature);
 
+// GrammarRules.
+// 
+// The Pratt parser tutorial at stuffwithstuff describes these as "Parselets".
+// The difference between this implementation and parselets is that the prefix
+// and infix parselets for the same token are stored on this one struct instead
+// in separate tables. This means the same rule implements different operations
+// that share the same lexeme.
 typedef struct {
   GrammarFn prefix;
   GrammarFn infix;
@@ -185,6 +192,7 @@ static void nextToken(Parser* parser) {
   makeToken(parser, TOK_EOF);
 }
 
+// Returns true iff the next token has the [expected] Type.
 static bool match(Parser* parser, TokenType expected) {
   if (peek(parser) != expected)
     return false;
@@ -192,6 +200,9 @@ static bool match(Parser* parser, TokenType expected) {
   return true;
 }
 
+// Moves past the next token which must have the [expected] type.
+// If the type is not as expected, this emits an error and attempts to continue
+// parsing at the next token.
 static void consume(Parser* parser, TokenType expected,
                     const char* errorMessage) {
   nextToken(parser);
@@ -204,6 +215,27 @@ static void consume(Parser* parser, TokenType expected,
 }
 
 // AST ------------------------------------------------------------------------
+
+static void parse(Parser* parser, int precedence) {
+	nextToken(parser);
+	Token token = parser->current;
+
+	GrammarFn prefix =  rules[token.type].prefix;
+	if (prefix == NULL) {
+		error(parser, "Parse error"); 
+		return;
+	}
+
+	bool canAssign = false;
+	prefix(parser, canAssign);
+	
+	while (precedence < rules[parser->current.type].precedence) {
+		nextToken(parser);
+		GrammarFn infix = rules[parser->previous.type].infix;
+		infix(parser, canAssign);
+	}
+}
+
 
 static void expression(Parser* parser) {
   // TODO(kendal): Implement.
