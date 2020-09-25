@@ -283,7 +283,7 @@ int obaCompile(ObaVM* vm, const char* source) {
 
   while (!match(compiler.parser, TOK_EOF)) {
     printTokenType(compiler.parser->current.type);
-    grouping(compiler.parser, true);
+    expression(compiler.parser);
     printf("\n");
   }
 
