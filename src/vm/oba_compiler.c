@@ -28,7 +28,8 @@ typedef struct {
 
 // Bytecode -------------------------------------------------------------------
 
-static int emitByte(Parser* parser, int byte) { /* What do we do here? */
+static void emitByte(Parser* parser, int byte) {
+  writeChunk(parser->vm->chunk, byte);
 }
 
 static void emitOp(Parser* parser, OpCode code) { emitByte(parser, code); }
@@ -49,9 +50,9 @@ static int addConstant(Parser* parser, Value value) {
 // the constant's location in the constant pool.
 static void emitConstant(Parser* parser, Value value) {
   // Register the constant in the VM's constant pool.
-  /*	 int constant = addConstant(parser, value);
-           emitOp(parser, OP_CONSTANT);
-           emitByte(parser, constant); */
+  int constant = addConstant(parser, value);
+  emitOp(parser, OP_CONSTANT);
+  emitByte(parser, constant);
 }
 
 // Grammar --------------------------------------------------------------------

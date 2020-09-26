@@ -2,8 +2,8 @@
 #define oba_vm_h
 
 #include "oba_compiler.h"
-#include "oba_token.h"
 #include "oba_opcodes.h"
+#include "oba_token.h"
 
 // TODO(kendal): List:
 // - Create a chunk type to represent compiled bytecode.
