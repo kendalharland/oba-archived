@@ -1,3 +1,12 @@
+ifndef config
+  config=release
+endif
+
+ifeq ($(config),debug)
+			 ALL_CFLAGS += -g
+else ifneq ($(config),release)
+		$(error "invalid configuration $(config)")
+endif
 
 PROJECTS := oba
 TARGET := oba
@@ -8,7 +17,7 @@ ALL_CFLAGS += $(INCLUDES) -o $(TARGET)
 all: $(PROJECTS)
 
 oba:
-	@echo "==== Building oba ===="
+	@echo "==== Building oba ($(config)) ===="
 	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*
 
 format:

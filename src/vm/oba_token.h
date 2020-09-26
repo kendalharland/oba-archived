@@ -3,6 +3,10 @@
 
 #include "oba_value.h"
 
+// Oba Tokens.
+//
+// WARNING: When updating this table, also update the table of GrammarRules in
+// oba_compiler.c.
 typedef enum {
   TOK_LPAREN,
   TOK_RPAREN,

@@ -37,9 +37,9 @@ static void emitOp(Parser* parser, OpCode code) { emitByte(parser, code); }
 // Adds [value] the the Vm's constant pool.
 // Returns the address of the new constant within the pool.
 static int addConstant(Parser* parser, Value value) {
-  // TODO(kjharland): We forgot to define the Value array.
-  // TODO(kjharland): We forgot to define the Chunk constant pool.
-  // TODO(kjharland): Lots of indirection here... clean this up.
+  // TODO(kendal): We forgot to define the Value array.
+  // TODO(kendal): We forgot to define the Chunk constant pool.
+  // TODO(kendal): Lots of indirection here... clean this up.
   writeValueArray(&parser->vm->chunk->constants, value);
   return parser->vm->chunk->constants.count - 1;
 }
@@ -196,6 +196,8 @@ static void makeToken(Parser* parser, TokenType type) {
 
 static bool isIdent(char c) { return isalpha(c) || c == '_'; }
 
+static bool isNumber(char c) { return isdigit(c); }
+
 // Finishes lexing an identifier.
 static void readIdent(Parser* parser) {
   while (isIdent(peekChar(parser)) || isdigit(peekChar(parser))) {
@@ -203,6 +205,13 @@ static void readIdent(Parser* parser) {
   }
   makeToken(parser, TOK_IDENT);
   // TODO(kendal): Handle keywords.
+}
+
+static void readNumber(Parser *parser) {
+  while(isNumber(peekChar(parser))) {
+    nextChar(parser);
+	}
+	makeToken(parser, TOK_NUMBER);
 }
 
 // Lexes the next token and stores it in [parser.current].
@@ -230,6 +239,10 @@ static void nextToken(Parser* parser) {
         readIdent(parser);
         return;
       }
+			if (isNumber(c)) {
+				readNumber(parser);
+				return;
+			}
       lexError(parser, "Invalid character '%c'.", c);
       parser->current.type = TOK_ERROR;
       parser->current.length = 0;
@@ -309,7 +322,7 @@ void initCompiler(Compiler* compiler, Parser* parser) {
   parser->vm->compiler = compiler;
 }
 
-// TODO(kjharland): Fix the type instead of using 'int'.
+// TODO(kendal): Fix the type instead of using 'int'.
 int obaCompile(ObaVM* vm, const char* source) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
