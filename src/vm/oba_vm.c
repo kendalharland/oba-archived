@@ -8,10 +8,12 @@ ObaVM* obaNewVM() {
   // TODO(kendal): sizeof(ObaVM) here instead?
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
   memset(vm, 0, sizeof(ObaVM));
+	initChunk(vm->chunk);
   return vm;
 }
 
 void obaFreeVM(ObaVM* vm) {
+	freeChunk(vm->chunk);
   free(vm);
   vm = NULL;
 }

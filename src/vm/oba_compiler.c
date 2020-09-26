@@ -39,8 +39,8 @@ static int addConstant(Parser* parser, Value value) {
   // TODO(kjharland): We forgot to define the Value array.
   // TODO(kjharland): We forgot to define the Chunk constant pool.
   // TODO(kjharland): Lots of indirection here... clean this up.
-  /*	writeValueArray(parser->vm->chunk->constants, value);
-          return paser->vm->chunk->constants.count - 1; */
+  writeValueArray(&parser->vm->chunk->constants, value);
+  return parser->vm->chunk->constants.count - 1;
 }
 
 // Registers [value] as a constant value.

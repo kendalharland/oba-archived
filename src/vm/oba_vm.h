@@ -3,6 +3,7 @@
 
 #include "oba_compiler.h"
 #include "oba_token.h"
+#include "oba_opcodes.h"
 
 // TODO(kendal): List:
 // - Create a chunk type to represent compiled bytecode.
@@ -11,6 +12,8 @@
 // - Write up the VM to decode the compiled chunks.
 struct ObaVM {
   Compiler* compiler;
+  // The chunk of compiled bytecode.
+  Chunk* chunk;
 };
 
 #endif

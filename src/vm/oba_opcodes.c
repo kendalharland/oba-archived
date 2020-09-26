@@ -8,10 +8,12 @@ void initChunk(Chunk* chunk) {
   chunk->capacity = 0;
   chunk->count = 0;
   chunk->code = NULL;
+  initValueArray(&chunk->constants);
 }
 
 void freeChunk(Chunk* chunk) {
   FREE_ARRAY(uint8_t, chunk, chunk->capacity);
+  freeValueArray(&chunk->constants);
   initChunk(chunk);
 }
 
