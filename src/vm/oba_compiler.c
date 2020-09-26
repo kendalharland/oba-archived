@@ -334,6 +334,7 @@ void initCompiler(Compiler* compiler, Parser* parser) {
 
 	compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
 	initChunk(compiler->parser->vm->chunk);
+	compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
 }
 
 // TODO(kendal): Fix the type instead of using 'int'.

@@ -12,8 +12,8 @@
 // - Write up the VM to decode the compiled chunks.
 struct ObaVM {
   Compiler* compiler;
-  // The chunk of compiled bytecode.
   Chunk* chunk;
+  uint8_t* ip;
 };
 
 #endif

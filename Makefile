@@ -3,7 +3,7 @@ ifndef config
 endif
 
 ifeq ($(config),debug)
-			 ALL_CFLAGS += -g
+			 ALL_CFLAGS += -g -DDEBUG_TRACE_EXECUTION
 else ifneq ($(config),release)
 		$(error "invalid configuration $(config)")
 endif

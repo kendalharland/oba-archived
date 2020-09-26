@@ -22,4 +22,6 @@ void freeValueArray(ValueArray*);
 // Writes a byte to the given [ValueArray], allocating if necessary.
 void writeValueArray(ValueArray*, Value);
 
+void printValue(Value value);
+
 #endif
