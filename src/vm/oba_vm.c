@@ -18,10 +18,6 @@ void obaFreeVM(ObaVM* vm) {
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-	Chunk chunk;
-	initChunk(&chunk);
-	vm->chunk = &chunk;
-
   obaCompile(vm, source);
 	// TODO(kendal): Disassemble the compiled chunks.
   // TODO(kendal): Interpret the compiled chunks.

@@ -9,6 +9,7 @@
 #include "oba_opcodes.h"
 #include "oba_token.h"
 #include "oba_vm.h"
+#include "oba_memory.h"
 
 typedef struct {
   ObaVM* vm;
@@ -163,6 +164,9 @@ static void printTokenType(TokenType type) {
   case TOK_NEWLINE:
     printf("TOK_NEWLINE");
     break;
+  case TOK_NUMBER:
+    printf("TOK_NUMBER");
+    break;
   default:
     printf("TOK_ERROR");
   }
@@ -211,6 +215,7 @@ static void readNumber(Parser *parser) {
   while(isNumber(peekChar(parser))) {
     nextChar(parser);
 	}
+	// TODO(kendal): read the token value here.
 	makeToken(parser, TOK_NUMBER);
 }
 
@@ -261,6 +266,12 @@ static bool match(Parser* parser, TokenType expected) {
     return false;
   nextToken(parser);
   return true;
+}
+
+static bool matchLine(Parser *parser) {
+  if (!match(parser, TOK_NEWLINE)) return false;
+	while (match(parser, TOK_NEWLINE));
+	return true;
 }
 
 // Moves past the next token which must have the [expected] type.
@@ -319,7 +330,10 @@ struct sCompiler {
 
 void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser = parser;
-  parser->vm->compiler = compiler;
+  compiler->parser->vm->compiler = compiler;
+
+	compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
+	initChunk(compiler->parser->vm->chunk);
 }
 
 // TODO(kendal): Fix the type instead of using 'int'.
@@ -338,20 +352,26 @@ int obaCompile(ObaVM* vm, const char* source) {
   parser.current.start = source;
   parser.current.length = 0;
   parser.current.line = 0;
-  // TODO(kendal): parser.current.value
+  parser.current.value = 0;
   parser.hasError = false;
 
-  // Read the first token. (Why?)
-  nextToken(&parser);
+  // TODO(kendal): Read the first token?
 
   Compiler compiler;
   initCompiler(&compiler, &parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
     printTokenType(compiler.parser->current.type);
-    expression(compiler.parser);
     printf("\n");
+    expression(compiler.parser);
+		// If no newline, the file must end on this line.
+		if (!matchLine(compiler.parser)) {
+			consume(compiler.parser, TOK_EOF, "Expected end of file.");
+			break;
+		}
   }
 
+	// TODO(kendal): Emit instr signalling the end of input source.
   return 0;
 }
+

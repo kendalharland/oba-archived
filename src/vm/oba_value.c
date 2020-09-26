@@ -11,7 +11,7 @@ void initValueArray(ValueArray* array) {
 }
 
 void freeValueArray(ValueArray* array) {
-  FREE_ARRAY(Value, array, array->capacity);
+  FREE_ARRAY(Value, array->values, array->capacity);
   initValueArray(array);
 }
 

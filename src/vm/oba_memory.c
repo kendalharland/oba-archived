@@ -1,7 +1,7 @@
 #include "oba_memory.h"
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
-  if (newSize == 0) {
+  if (newSize == 0 && pointer != NULL) {
     free(pointer);
     return NULL;
   }

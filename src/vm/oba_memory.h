@@ -3,18 +3,15 @@
 
 #include <stdlib.h>
 
-#define MIN_CAPACITY 8
-#define CAPACITY_RESIZE_RATE 2
-
 #define GROW_CAPACITY(cap)                                                     \
-  ((cap) < MIN_CAPACITY ? MIN_CAPACITY : (cap)*CAPACITY_RESIZE_RATE)
+  ((cap) < 8 ? 8 : (cap)*2)
 
 #define GROW_ARRAY(type, pointer, oldCount, newCount)                          \
   (type*)reallocate(pointer, sizeof(type) * (oldCount),                        \
                     sizeof(type) * (newCount))
 
 #define FREE_ARRAY(type, pointer, oldCount)                                    \
-  (type*)reallocate(pointer, sizeof(type) * oldCount, 0)
+  reallocate(pointer, sizeof(type) * oldCount, 0)
 
 // Reallocates [pointer] from [oldSize] to [newSize].
 // If [newSize] is 0, [pointer] is freed.
