@@ -18,5 +18,6 @@ void obaFreeVM(ObaVM* vm) {
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
   obaCompile(vm, source);
+  // TODO(kjharland): Interpret the compiled chunks.
   return OBA_RESULT_SUCCESS;
 }
