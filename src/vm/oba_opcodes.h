@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#include "oba_value.h"
+
 typedef enum {
   OP_CONSTANT,
 } OpCode;

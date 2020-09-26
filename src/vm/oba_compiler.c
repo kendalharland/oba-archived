@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "oba_compiler.h"
+#include "oba_opcodes.h"
 #include "oba_token.h"
 #include "oba_vm.h"
 
@@ -24,6 +25,34 @@ typedef struct {
 
   int currentLine;
 } Parser;
+
+// Bytecode -------------------------------------------------------------------
+
+static int emitByte(Parser* parser, int byte) { /* What do we do here? */
+}
+
+static void emitOp(Parser* parser, OpCode code) { emitByte(parser, code); }
+
+// Adds [value] the the Vm's constant pool.
+// Returns the address of the new constant within the pool.
+static int addConstant(Parser* parser, Value value) {
+  // TODO(kjharland): We forgot to define the Value array.
+  // TODO(kjharland): We forgot to define the Chunk constant pool.
+  // TODO(kjharland): Lots of indirection here... clean this up.
+  /*	writeValueArray(parser->vm->chunk->constants, value);
+          return paser->vm->chunk->constants.count - 1; */
+}
+
+// Registers [value] as a constant value.
+//
+// Constants are OP_CONSTANT followed by a 16-bit argument which points to
+// the constant's location in the constant pool.
+static void emitConstant(Parser* parser, Value value) {
+  // Register the constant in the VM's constant pool.
+  /*	 int constant = addConstant(parser, value);
+           emitOp(parser, OP_CONSTANT);
+           emitByte(parser, constant); */
+}
 
 // Grammar --------------------------------------------------------------------
 
@@ -265,8 +294,7 @@ static void grouping(Parser* parser, bool canAssign) {
 }
 
 static void literal(Parser* parser, bool canAssign) {
-  perror("unimplemented: literal");
-  exit(1);
+  emitConstant(parser, parser->previous.value);
 }
 
 // Compiling ------------------------------------------------------------------

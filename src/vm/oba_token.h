@@ -1,6 +1,8 @@
 #ifndef oba_token_h
 #define oba_token_h
 
+#include "oba_value.h"
+
 typedef enum {
   TOK_LPAREN,
   TOK_RPAREN,
@@ -30,7 +32,7 @@ typedef struct {
 
   // The parsed value if the token is a literal.
   // TODO(kendal): Define this instead of using 'int'.
-  int value;
+  Value value;
 } Token;
 
 #endif
