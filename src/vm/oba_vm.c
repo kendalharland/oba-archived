@@ -24,8 +24,7 @@ void obaFreeVM(ObaVM* vm) {
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
   obaCompile(vm, source);
 #ifdef DEBUG_TRACE_EXECUTION
-	disassemble(vm->chunk, "interpret");
+  disassemble(vm->chunk, "interpret");
 #endif
   return OBA_RESULT_SUCCESS;
 }
-

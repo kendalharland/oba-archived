@@ -3,8 +3,7 @@
 
 #include <stdlib.h>
 
-#define GROW_CAPACITY(cap)                                                     \
-  ((cap) < 8 ? 8 : (cap)*2)
+#define GROW_CAPACITY(cap) ((cap) < 8 ? 8 : (cap)*2)
 
 #define GROW_ARRAY(type, pointer, oldCount, newCount)                          \
   (type*)reallocate(pointer, sizeof(type) * (oldCount),                        \

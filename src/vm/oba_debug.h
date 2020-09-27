@@ -7,4 +7,3 @@ int disassembleInstruction(Chunk*, int);
 int disassemble(Chunk*, const char*);
 
 #endif
-

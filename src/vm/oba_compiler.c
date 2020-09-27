@@ -6,10 +6,10 @@
 #include <string.h>
 
 #include "oba_compiler.h"
+#include "oba_memory.h"
 #include "oba_opcodes.h"
 #include "oba_token.h"
 #include "oba_vm.h"
-#include "oba_memory.h"
 
 typedef struct {
   ObaVM* vm;
@@ -38,9 +38,6 @@ static void emitOp(Parser* parser, OpCode code) { emitByte(parser, code); }
 // Adds [value] the the Vm's constant pool.
 // Returns the address of the new constant within the pool.
 static int addConstant(Parser* parser, Value value) {
-  // TODO(kendal): We forgot to define the Value array.
-  // TODO(kendal): We forgot to define the Chunk constant pool.
-  // TODO(kendal): Lots of indirection here... clean this up.
   writeValueArray(&parser->vm->chunk->constants, value);
   return parser->vm->chunk->constants.count - 1;
 }
@@ -198,6 +195,11 @@ static void makeToken(Parser* parser, TokenType type) {
     parser->current.line--;
 }
 
+static void makeNumber(Parser* parser) {
+  parser->current.value = strtod(parser->tokenStart, NULL);
+  makeToken(parser, TOK_NUMBER);
+}
+
 static bool isIdent(char c) { return isalpha(c) || c == '_'; }
 
 static bool isNumber(char c) { return isdigit(c); }
@@ -211,12 +213,11 @@ static void readIdent(Parser* parser) {
   // TODO(kendal): Handle keywords.
 }
 
-static void readNumber(Parser *parser) {
-  while(isNumber(peekChar(parser))) {
+static void readNumber(Parser* parser) {
+  while (isNumber(peekChar(parser))) {
     nextChar(parser);
-	}
-	// TODO(kendal): read the token value here.
-	makeToken(parser, TOK_NUMBER);
+  }
+  makeNumber(parser);
 }
 
 // Lexes the next token and stores it in [parser.current].
@@ -244,10 +245,10 @@ static void nextToken(Parser* parser) {
         readIdent(parser);
         return;
       }
-			if (isNumber(c)) {
-				readNumber(parser);
-				return;
-			}
+      if (isNumber(c)) {
+        readNumber(parser);
+        return;
+      }
       lexError(parser, "Invalid character '%c'.", c);
       parser->current.type = TOK_ERROR;
       parser->current.length = 0;
@@ -268,10 +269,12 @@ static bool match(Parser* parser, TokenType expected) {
   return true;
 }
 
-static bool matchLine(Parser *parser) {
-  if (!match(parser, TOK_NEWLINE)) return false;
-	while (match(parser, TOK_NEWLINE));
-	return true;
+static bool matchLine(Parser* parser) {
+  if (!match(parser, TOK_NEWLINE))
+    return false;
+  while (match(parser, TOK_NEWLINE))
+    ;
+  return true;
 }
 
 // Moves past the next token which must have the [expected] type.
@@ -292,7 +295,7 @@ static void consume(Parser* parser, TokenType expected,
 
 static void parse(Parser* parser, int precedence) {
   nextToken(parser);
-  Token token = parser->current;
+  Token token = parser->previous;
 
   GrammarFn prefix = rules[token.type].prefix;
   if (prefix == NULL) {
@@ -303,7 +306,7 @@ static void parse(Parser* parser, int precedence) {
   bool canAssign = false;
   prefix(parser, canAssign);
 
-  while (precedence < rules[parser->current.type].precedence) {
+  while (precedence < rules[parser->previous.type].precedence) {
     nextToken(parser);
     GrammarFn infix = rules[parser->previous.type].infix;
     infix(parser, canAssign);
@@ -332,9 +335,9 @@ void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser = parser;
   compiler->parser->vm->compiler = compiler;
 
-	compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
-	initChunk(compiler->parser->vm->chunk);
-	compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
+  compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
+  initChunk(compiler->parser->vm->chunk);
+  compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
 }
 
 // TODO(kendal): Fix the type instead of using 'int'.
@@ -356,23 +359,20 @@ int obaCompile(ObaVM* vm, const char* source) {
   parser.current.value = 0;
   parser.hasError = false;
 
-  // TODO(kendal): Read the first token?
+  nextToken(&parser);
 
   Compiler compiler;
   initCompiler(&compiler, &parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
-    printTokenType(compiler.parser->current.type);
-    printf("\n");
     expression(compiler.parser);
-		// If no newline, the file must end on this line.
-		if (!matchLine(compiler.parser)) {
-			consume(compiler.parser, TOK_EOF, "Expected end of file.");
-			break;
-		}
+    // If no newline, the file must end on this line.
+    if (!matchLine(compiler.parser)) {
+      consume(compiler.parser, TOK_EOF, "Expected end of file.");
+      break;
+    }
   }
 
-	// TODO(kendal): Emit instr signalling the end of input source.
+  // TODO(kendal): Emit instr signalling the end of input source.
   return 0;
 }
-

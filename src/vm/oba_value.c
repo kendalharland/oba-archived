@@ -27,6 +27,4 @@ void writeValueArray(ValueArray* array, Value value) {
   array->count++;
 }
 
-void printValue(Value value) {
- printf("%g", value);
-}
+void printValue(Value value) { printf("%g", value); }
