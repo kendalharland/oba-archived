@@ -61,6 +61,8 @@ static void emitConstant(Parser* parser, Value value) {
 
 // Grammar --------------------------------------------------------------------
 
+// Parse precedence table.
+// Greater value == greater precedence.
 typedef enum {
   PREC_NONE,
   PREC_LOWEST,
