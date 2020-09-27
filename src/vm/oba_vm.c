@@ -37,11 +37,14 @@ static Value pop(ObaVM* vm) {
 
 static void run(ObaVM* vm) {
 #define READ_BYTE() (*vm->ip++)
+#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+
   for (;;) {
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
     case OP_CONSTANT:
-      // Push the constant onto the stack.
+      push(vm, READ_CONSTANT());
+      break;
     case OP_ADD:
       // Pop the last two args off the stack.
       // Add them, push the result onto the stack.
