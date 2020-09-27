@@ -5,6 +5,8 @@
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
+#define EXIT_COMPILE_ERROR 65
+#define EXIT_RUNTIME_ERROR 75
 
 #define PROMPT ">> "
 
@@ -51,9 +53,30 @@ static void repl(void) {
   printf("exiting. \n");
 }
 
+static char* readFile(const char* filename) {
+  FILE* file = fopen(filename, "rb");
+
+  fseek(file, 0L, SEEK_END);
+  size_t fileSize = ftell(file);
+  rewind(file);
+
+  char* buffer = (char*)malloc(fileSize + 1);
+  size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+  buffer[bytesRead] = '\0';
+
+  fclose(file);
+  return buffer;
+}
+
 static void runFile(const char* filename) {
-  perror("unimplemented: runFile");
-  exit(EXIT_FAILURE);
+  char* source = readFile(filename);
+  ObaInterpretResult result = interpret(source);
+  free(source);
+
+  if (result == OBA_RESULT_COMPILE_ERROR)
+    exit(EXIT_COMPILE_ERROR);
+  if (result == OBA_RESULT_RUNTIME_ERROR)
+    exit(EXIT_RUNTIME_ERROR);
 }
 
 int main(int argc, char** argv) {
