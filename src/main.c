@@ -8,7 +8,7 @@
 
 #define PROMPT ">> "
 
-char* read(void) {
+static char* read(void) {
   char* line = NULL;
   ssize_t bufsize = 0; // have getline allocate a buffer for us
 
@@ -24,7 +24,7 @@ char* read(void) {
   return line;
 }
 
-ObaInterpretResult interpret(char* input) {
+static ObaInterpretResult interpret(char* input) {
   // TODO(kendal): the repl should use the same VM each time.
   ObaVM* vm = obaNewVM();
   ObaInterpretResult result = obaInterpret(vm, input);
@@ -32,9 +32,13 @@ ObaInterpretResult interpret(char* input) {
   return result;
 }
 
-void repl(void) {
+static void repl(void) {
   char* input;
   ObaInterpretResult result;
+
+  // Print banner.
+  printf("oba %s\n", OBA_VERSION_STRING);
+  printf("Press ctrl+d to exit\n");
 
   do {
     printf(PROMPT);
@@ -47,13 +51,19 @@ void repl(void) {
   printf("exiting. \n");
 }
 
-void welcome(void) {
-  printf("oba %s\n", OBA_VERSION_STRING);
-  printf("Press ctrl+d to exit\n");
+static void runFile(const char* filename) {
+  perror("unimplemented: runFile");
+  exit(EXIT_FAILURE);
 }
 
 int main(int argc, char** argv) {
-  welcome();
-  repl();
+  if (argc == 1) {
+    repl();
+  } else if (argc == 2) {
+    runFile(argv[1]);
+  } else {
+    fprintf(stderr, "Usage: oba [path]\n");
+    exit(EXIT_FAILURE);
+  }
   return EXIT_SUCCESS;
 }
