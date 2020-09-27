@@ -11,6 +11,8 @@ typedef enum {
   OP_CONSTANT,
   OP_ADD,
   OP_MINUS,
+  OP_MULTIPLY,
+  OP_DIVIDE,
 } OpCode;
 
 // Chunk is a dynamic array of Oba bytecode instructions.

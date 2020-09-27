@@ -64,7 +64,8 @@ static void emitConstant(Parser* parser, Value value) {
 typedef enum {
   PREC_NONE,
   PREC_LOWEST,
-  PREC_SUM, // + -
+  PREC_SUM,     // + -
+  PREC_PRODUCT, // * /
 } Precedence;
 
 typedef void (*GrammarFn)(Parser*, bool canAssign);
@@ -97,16 +98,18 @@ typedef struct {
 #define INFIX_OPERATOR(prec, name) { NULL, infixOp, prec, name }
 
 GrammarRule rules[] =  {
-  /* TOK_LPAREN  */ PREFIX(grouping),  
-  /* TOK_RPAREN  */ UNUSED, 
-  /* TOK_PLUS    */ INFIX_OPERATOR(PREC_SUM, "+"),
-  /* TOK_MINUS   */ INFIX_OPERATOR(PREC_SUM, "-"),
-  /* TOK_IDENT   */ UNUSED, // TODO(kendal): This is not correct.
-  /* TOK_NUMBER  */ PREFIX(literal),
-  /* TOK_STRING  */ UNUSED, // TODO(kendal): This is not correct.
-  /* TOK_NEWLINE */ UNUSED, 
-  /* TOK_ERROR   */ UNUSED,  
-  /* TOK_EOF     */ UNUSED,
+  /* TOK_LPAREN    */ PREFIX(grouping),  
+  /* TOK_RPAREN    */ UNUSED, 
+  /* TOK_PLUS      */ INFIX_OPERATOR(PREC_SUM, "+"),
+  /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
+  /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
+  /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
+  /* TOK_IDENT     */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_NUMBER    */ PREFIX(literal),
+  /* TOK_STRING    */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_NEWLINE   */ UNUSED, 
+  /* TOK_ERROR     */ UNUSED,  
+  /* TOK_EOF       */ UNUSED,
 };
 
 // Gets the [GrammarRule] associated with tokens of [type].
@@ -148,28 +151,6 @@ static void error(Parser* parser, const char* format, ...) {
   va_start(args, format);
   printError(parser, parser->currentLine, "Error", format, args);
   va_end(args);
-}
-
-static void printTokenType(TokenType type) {
-  switch (type) {
-  case TOK_LPAREN:
-    printf("TOK_LPAREN");
-    break;
-  case TOK_RPAREN:
-    printf("TOK_RPAREN");
-    break;
-  case TOK_EOF:
-    printf("TOK_EOF");
-    break;
-  case TOK_NEWLINE:
-    printf("TOK_NEWLINE");
-    break;
-  case TOK_NUMBER:
-    printf("TOK_NUMBER");
-    break;
-  default:
-    printf("TOK_ERROR");
-  }
 }
 
 // Parsing --------------------------------------------------------------------
@@ -245,6 +226,12 @@ static void nextToken(Parser* parser) {
       return;
     case '-':
       makeToken(parser, TOK_MINUS);
+      return;
+    case '*':
+      makeToken(parser, TOK_MULTIPLY);
+      return;
+    case '/':
+      makeToken(parser, TOK_DIVIDE);
       return;
     case '\n':
       makeToken(parser, TOK_NEWLINE);
@@ -341,11 +328,15 @@ static void infixOp(Parser* parser, bool canAssign) {
   ignoreNewlines(parser);
 
   // Compile the right hand side. precedence + 1 makes this left-associative.
-  parse(parser, rule->precedence + 1);
+  parse(parser, rule->precedence);
   if (strcmp(rule->name, "+") == 0) {
     emitOp(parser, OP_ADD);
   } else if (strcmp(rule->name, "-") == 0) {
     emitOp(parser, OP_MINUS);
+  } else if (strcmp(rule->name, "*") == 0) {
+    emitOp(parser, OP_MULTIPLY);
+  } else if (strcmp(rule->name, "/") == 0) {
+    emitOp(parser, OP_DIVIDE);
   } else {
     error(parser, "Invalid operator %s", rule->name);
   }
