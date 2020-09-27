@@ -166,6 +166,13 @@ static char nextChar(Parser* parser) {
   return c;
 }
 
+static bool matchChar(Parser* parser, char c) {
+  if (peekChar(parser) != c)
+    return false;
+  nextChar(parser);
+  return true;
+}
+
 // Returns the type of the current token.
 static TokenType peek(Parser* parser) { return parser->current.type; }
 
@@ -205,6 +212,13 @@ static void readNumber(Parser* parser) {
   makeNumber(parser);
 }
 
+static void skipLineComment(Parser* parser) {
+  // A comment goes until the end of the line.
+  while (peekChar(parser) != '\n' && peekChar(parser) != '\0') {
+    nextChar(parser);
+  }
+}
+
 // Lexes the next token and stores it in [parser.current].
 static void nextToken(Parser* parser) {
   parser->previous = parser->current;
@@ -216,6 +230,13 @@ static void nextToken(Parser* parser) {
     parser->tokenStart = parser->currentChar;
     char c = nextChar(parser);
     switch (c) {
+    case ' ':
+    case '\r':
+    case '\t':
+      break;
+    case '\n':
+      makeToken(parser, TOK_NEWLINE);
+      return;
     case '(':
       makeToken(parser, TOK_LPAREN);
       return;
@@ -232,10 +253,12 @@ static void nextToken(Parser* parser) {
       makeToken(parser, TOK_MULTIPLY);
       return;
     case '/':
+      if (matchChar(parser, '/')) {
+        skipLineComment(parser);
+        break;
+      }
+
       makeToken(parser, TOK_DIVIDE);
-      return;
-    case '\n':
-      makeToken(parser, TOK_NEWLINE);
       return;
     default:
       if (isIdent(c)) {
@@ -380,6 +403,7 @@ int obaCompile(ObaVM* vm, const char* source) {
 
   Compiler compiler;
   initCompiler(&compiler, &parser);
+  ignoreNewlines(&parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
     expression(compiler.parser);
