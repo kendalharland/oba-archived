@@ -330,17 +330,16 @@ static void infixOp(Parser* parser, bool canAssign) {
 
   // Compile the right hand side. precedence + 1 makes this left-associative.
   parse(parser, rule->precedence);
-  if (strcmp(rule->name, "+") == 0) {
+  if (strcmp(rule->name, "+") == 0)
     emitOp(parser, OP_ADD);
-  } else if (strcmp(rule->name, "-") == 0) {
+  else if (strcmp(rule->name, "-") == 0)
     emitOp(parser, OP_MINUS);
-  } else if (strcmp(rule->name, "*") == 0) {
+  else if (strcmp(rule->name, "*") == 0)
     emitOp(parser, OP_MULTIPLY);
-  } else if (strcmp(rule->name, "/") == 0) {
+  else if (strcmp(rule->name, "/") == 0)
     emitOp(parser, OP_DIVIDE);
-  } else {
+  else
     error(parser, "Invalid operator %s", rule->name);
-  }
 }
 
 // Compiling ------------------------------------------------------------------
