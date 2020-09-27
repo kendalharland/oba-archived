@@ -37,8 +37,19 @@ static Value pop(ObaVM* vm) {
 }
 
 static void run(ObaVM* vm) {
+
+  // clang-format off
+
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+#define BINARY_OP(op)                                                          \
+do {                                                                           \
+  double b = pop(vm);                                                          \
+  double a = pop(vm);                                                          \
+  push(vm, a op b);                                                            \
+} while (0)
+
+  // clang-format on
 
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -50,20 +61,16 @@ static void run(ObaVM* vm) {
       push(vm, READ_CONSTANT());
       break;
     case OP_ADD:
-      // Pop the last two args off the stack.
-      // Add them, push the result onto the stack.
+      BINARY_OP(+);
       break;
     case OP_MINUS:
-      // Pop the last two args off the stack.
-      // Subtract them, push the result onto the stack.
+      BINARY_OP(-);
       break;
     case OP_MULTIPLY:
-      // Pop the last two args off the stack.
-      // Mul them, push the result onto the stack.
+      BINARY_OP(*);
       break;
     case OP_DIVIDE:
-      // Pop the last two args off the stack.
-      // Divide them, push the result onto the stack.
+      BINARY_OP(/);
       break;
     case OP_EXIT:
       return;
