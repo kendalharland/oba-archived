@@ -100,6 +100,7 @@ GrammarRule rules[] =  {
   /* TOK_LPAREN  */ PREFIX(grouping),  
   /* TOK_RPAREN  */ UNUSED, 
   /* TOK_PLUS    */ INFIX_OPERATOR(PREC_SUM, "+"),
+  /* TOK_MINUS   */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_IDENT   */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NUMBER  */ PREFIX(literal),
   /* TOK_STRING  */ UNUSED, // TODO(kendal): This is not correct.
@@ -242,6 +243,9 @@ static void nextToken(Parser* parser) {
     case '+':
       makeToken(parser, TOK_PLUS);
       return;
+    case '-':
+      makeToken(parser, TOK_MINUS);
+      return;
     case '\n':
       makeToken(parser, TOK_NEWLINE);
       return;
@@ -338,8 +342,13 @@ static void infixOp(Parser* parser, bool canAssign) {
 
   // Compile the right hand side. precedence + 1 makes this left-associative.
   parse(parser, rule->precedence + 1);
-  emitOp(parser, OP_ADD);
-  printf("infixOP\n");
+  if (strcmp(rule->name, "+") == 0) {
+    emitOp(parser, OP_ADD);
+  } else if (strcmp(rule->name, "-") == 0) {
+    emitOp(parser, OP_MINUS);
+  } else {
+    error(parser, "Invalid operator %s", rule->name);
+  }
 }
 
 // Compiling ------------------------------------------------------------------

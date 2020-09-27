@@ -11,6 +11,7 @@ typedef enum {
   TOK_LPAREN,
   TOK_RPAREN,
   TOK_PLUS,
+  TOK_MINUS,
 
   TOK_IDENT,
   TOK_NUMBER,
