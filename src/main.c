@@ -7,6 +7,7 @@
 #define EXIT_FAILURE 1
 #define EXIT_COMPILE_ERROR 65
 #define EXIT_RUNTIME_ERROR 75
+#define EXIT_IO_ERROR 85
 
 #define PROMPT ">> "
 
@@ -55,13 +56,25 @@ static void repl(void) {
 
 static char* readFile(const char* filename) {
   FILE* file = fopen(filename, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "Could not open file \"%s\".\n", filename);
+    exit(EXIT_IO_ERROR);
+  }
 
   fseek(file, 0L, SEEK_END);
   size_t fileSize = ftell(file);
   rewind(file);
 
   char* buffer = (char*)malloc(fileSize + 1);
+  if (buffer == NULL) {
+    fprintf(stderr, "Not enough memory to read \"%s\".\n", filename);
+    exit(EXIT_IO_ERROR);
+  }
   size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+  if (bytesRead < fileSize) {
+    fprintf(stderr, "Could not read file \"%s\".\n", filename);
+    exit(EXIT_IO_ERROR);
+  }
   buffer[bytesRead] = '\0';
 
   fclose(file);
