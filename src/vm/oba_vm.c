@@ -8,10 +8,13 @@
 #include "oba_debug.h"
 #endif
 
+static void resetStack(ObaVM* vm) { vm->stackTop = vm->stack; }
+
 ObaVM* obaNewVM() {
   // TODO(kendal): sizeof(ObaVM) here instead?
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
   memset(vm, 0, sizeof(ObaVM));
+  resetStack(vm);
   return vm;
 }
 
@@ -21,11 +24,24 @@ void obaFreeVM(ObaVM* vm) {
   vm = NULL;
 }
 
+static void push(ObaVM* vm, Value value) {
+  *vm->stackTop = value;
+  vm->stackTop++;
+}
+
+static Value pop(ObaVM* vm) {
+  // TODO(kendal): Handle vm->stackTop == vm->stack?
+  vm->stackTop--;
+  return *vm->stackTop;
+}
+
 static void run(ObaVM* vm) {
 #define READ_BYTE() (*vm->ip++)
   for (;;) {
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
+    case OP_CONSTANT:
+      // Push the constant onto the stack.
     case OP_ADD:
       // Pop the last two args off the stack.
       // Add them, push the result onto the stack.
