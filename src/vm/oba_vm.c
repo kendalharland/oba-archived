@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -54,6 +55,14 @@ do {                                                                           \
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+    printf("          ");
+    for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
+      printf("[ ");
+      printValue(*slot);
+      printf(" ]");
+    }
+    printf("\n");
+
 #endif
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
