@@ -27,6 +27,12 @@ typedef struct {
   int currentLine;
 } Parser;
 
+// Forward declarations.
+static void ignoreNewlines(Parser*);
+static void grouping(Parser*, bool);
+static void infixOp(Parser*, bool);
+static void literal(Parser*, bool);
+
 // Bytecode -------------------------------------------------------------------
 
 static void emitByte(Parser* parser, int byte) {
@@ -58,14 +64,10 @@ static void emitConstant(Parser* parser, Value value) {
 typedef enum {
   PREC_NONE,
   PREC_LOWEST,
-  PREC_TERM, // + -
+  PREC_SUM, // + -
 } Precedence;
 
-// TODO(kendal): Replace this with the appropriate type.
-typedef void Signature;
-
 typedef void (*GrammarFn)(Parser*, bool canAssign);
-typedef void (*SignatureFn)(Parser* parser, Signature* signature);
 
 // Oba grammar rules.
 //
@@ -81,7 +83,6 @@ typedef void (*SignatureFn)(Parser* parser, Signature* signature);
 typedef struct {
   GrammarFn prefix;
   GrammarFn infix;
-  SignatureFn method;
   Precedence precedence;
   const char* name;
 } GrammarRule;
@@ -91,18 +92,14 @@ typedef struct {
 // Pratt parser rules.
 //
 // See: http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
-#define UNUSED                     { NULL, NULL, NULL, PREC_NONE, NULL }
-#define PREFIX(fn)                 { fn, NULL, NULL, PREC_NONE, NULL }
-#define INFIX_OPERATOR(prec, name) { NULL, infixOp, infixSignature, prec, name }
-#define OPERATOR(name)             { unaryOp, infixOp, mixedSignature, PREC_TERM, name }
-
-// Forward declarations.
-static void grouping(Parser*, bool);
-static void literal(Parser*, bool);
+#define UNUSED                     { NULL, NULL, PREC_NONE, NULL }
+#define PREFIX(fn)                 { fn, NULL, PREC_NONE, NULL }
+#define INFIX_OPERATOR(prec, name) { NULL, infixOp, prec, name }
 
 GrammarRule rules[] =  {
   /* TOK_LPAREN  */ PREFIX(grouping),  
   /* TOK_RPAREN  */ UNUSED, 
+  /* TOK_PLUS    */ INFIX_OPERATOR(PREC_SUM, "+"),
   /* TOK_IDENT   */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NUMBER  */ PREFIX(literal),
   /* TOK_STRING  */ UNUSED, // TODO(kendal): This is not correct.
@@ -110,6 +107,11 @@ GrammarRule rules[] =  {
   /* TOK_ERROR   */ UNUSED,  
   /* TOK_EOF     */ UNUSED,
 };
+
+// Gets the [GrammarRule] associated with tokens of [type].
+static GrammarRule* getRule(TokenType type) {
+  return &rules[type];
+}
 
 // clang-format on
 
@@ -237,6 +239,9 @@ static void nextToken(Parser* parser) {
     case ')':
       makeToken(parser, TOK_RPAREN);
       return;
+    case '+':
+      makeToken(parser, TOK_PLUS);
+      return;
     case '\n':
       makeToken(parser, TOK_NEWLINE);
       return;
@@ -277,6 +282,8 @@ static bool matchLine(Parser* parser) {
   return true;
 }
 
+static void ignoreNewlines(Parser* parser) { matchLine(parser); }
+
 // Moves past the next token which must have the [expected] type.
 // If the type is not as expected, this emits an error and attempts to continue
 // parsing at the next token.
@@ -306,7 +313,7 @@ static void parse(Parser* parser, int precedence) {
   bool canAssign = false;
   prefix(parser, canAssign);
 
-  while (precedence < rules[parser->previous.type].precedence) {
+  while (precedence < rules[parser->current.type].precedence) {
     nextToken(parser);
     GrammarFn infix = rules[parser->previous.type].infix;
     infix(parser, canAssign);
@@ -323,6 +330,16 @@ static void grouping(Parser* parser, bool canAssign) {
 
 static void literal(Parser* parser, bool canAssign) {
   emitConstant(parser, parser->previous.value);
+}
+
+static void infixOp(Parser* parser, bool canAssign) {
+  GrammarRule* rule = getRule(parser->previous.type);
+  ignoreNewlines(parser);
+
+  // Compile the right hand side. precedence + 1 makes this left-associative.
+  parse(parser, rule->precedence + 1);
+  emitOp(parser, OP_ADD);
+  printf("infixOP\n");
 }
 
 // Compiling ------------------------------------------------------------------
