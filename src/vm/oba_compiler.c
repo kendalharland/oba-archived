@@ -381,7 +381,7 @@ void initCompiler(Compiler* compiler, Parser* parser) {
 }
 
 // TODO(kendal): Fix the type instead of using 'int'.
-int obaCompile(ObaVM* vm, const char* source) {
+bool obaCompile(ObaVM* vm, const char* source) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
     source += 3;
@@ -415,6 +415,5 @@ int obaCompile(ObaVM* vm, const char* source) {
   }
 
   emitOp(&parser, OP_EXIT);
-  // TODO(kendal): Emit instr signalling the end of input source.
-  return 0;
+  return parser.hasError;
 }

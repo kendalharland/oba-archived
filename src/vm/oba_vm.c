@@ -99,6 +99,8 @@ static ObaInterpretResult interpret(ObaVM* vm) {
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-  obaCompile(vm, source);
+  if (obaCompile(vm, source)) {
+    return OBA_RESULT_COMPILE_ERROR;
+  }
   return interpret(vm);
 }
