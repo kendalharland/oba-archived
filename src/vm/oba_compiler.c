@@ -146,8 +146,7 @@ static void error(Parser* parser, const char* format, ...) {
 
   // The lexer already reported this error.
   if (parser->previous.type == TOK_ERROR)
-    ;
-  return;
+    return;
 
   va_list args;
   va_start(args, format);
@@ -392,6 +391,7 @@ int obaCompile(ObaVM* vm, const char* source) {
     }
   }
 
+  emitOp(&parser, OP_EXIT);
   // TODO(kendal): Emit instr signalling the end of input source.
   return 0;
 }

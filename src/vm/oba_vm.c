@@ -20,6 +20,7 @@ ObaVM* obaNewVM() {
 
 void obaFreeVM(ObaVM* vm) {
   freeChunk(vm->chunk);
+  vm->stackTop = NULL;
   free(vm);
   vm = NULL;
 }
@@ -40,6 +41,9 @@ static void run(ObaVM* vm) {
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
 
   for (;;) {
+#ifdef DEBUG_TRACE_EXECUTION
+    disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+#endif
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
     case OP_CONSTANT:
@@ -61,6 +65,8 @@ static void run(ObaVM* vm) {
       // Pop the last two args off the stack.
       // Divide them, push the result onto the stack.
       break;
+    case OP_EXIT:
+      return;
     }
   }
 #undef READ_BYTE
@@ -78,8 +84,5 @@ static ObaInterpretResult interpret(ObaVM* vm) {
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
   obaCompile(vm, source);
-#ifdef DEBUG_TRACE_EXECUTION
-  disassemble(vm->chunk, "interpret");
-#endif
   return interpret(vm);
 }
