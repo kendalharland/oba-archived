@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,23 @@ static Value pop(ObaVM* vm) {
   return *vm->stackTop;
 }
 
-static void run(ObaVM* vm) {
+static void runtimeError(ObaVM* vm, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  // TODO(kendal): Capture op line info
+  /*
+  size_t instruction = vm->ip - vm->chunk->code - 1;
+  int line = vm->chunk->lines[instruction];
+  fprintf(stderr, "[line %d] in script\n", line);
+  */
+  resetStack(vm);
+}
+
+static ObaInterpretResult run(ObaVM* vm) {
 
   // clang-format off
 
@@ -51,9 +68,9 @@ static void run(ObaVM* vm) {
 // TODO(kendal): how do we handle non-numeric ops?
 #define BINARY_OP(type, op)                                                    \
 do {                                                                           \
-  if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {                            \
-    perror("ops must be numbers");                                             \
-    exit(1);                                                                   \
+  if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {                    \
+    runtimeError(vm, "Expected numeric operands to (op)");                     \
+    return OBA_RESULT_RUNTIME_ERROR;                                           \
   }                                                                            \
   double b = AS_NUMBER(pop(vm));                                               \
   double a = AS_NUMBER(pop(vm));                                               \
@@ -92,7 +109,7 @@ do {                                                                           \
       BINARY_OP(OBA_NUMBER, /);
       break;
     case OP_EXIT:
-      return;
+      return OBA_RESULT_SUCCESS;
     }
   }
 #undef READ_BYTE
@@ -103,9 +120,7 @@ static ObaInterpretResult interpret(ObaVM* vm) {
     return OBA_RESULT_SUCCESS;
 
   vm->ip = vm->chunk->code;
-  run(vm);
-
-  return OBA_RESULT_SUCCESS;
+  return run(vm);
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
