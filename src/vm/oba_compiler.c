@@ -188,7 +188,8 @@ static void makeToken(Parser* parser, TokenType type) {
 }
 
 static void makeNumber(Parser* parser) {
-  parser->current.value = strtod(parser->tokenStart, NULL);
+  double value = strtod(parser->tokenStart, NULL);
+  parser->current.value = OBA_NUMBER(value);
   makeToken(parser, TOK_NUMBER);
 }
 
@@ -396,7 +397,8 @@ bool obaCompile(ObaVM* vm, const char* source) {
   parser.current.start = source;
   parser.current.length = 0;
   parser.current.line = 0;
-  parser.current.value = 0;
+  // TODO(kendal): Do we need nil?
+  parser.current.value = OBA_NUMBER(0);
   parser.hasError = false;
 
   nextToken(&parser);

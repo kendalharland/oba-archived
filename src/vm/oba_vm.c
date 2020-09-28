@@ -26,6 +26,10 @@ void obaFreeVM(ObaVM* vm) {
   vm = NULL;
 }
 
+static Value peek(ObaVM* vm, int lookahead) {
+  return *(vm->stackTop + lookahead);
+}
+
 static void push(ObaVM* vm, Value value) {
   *vm->stackTop = value;
   vm->stackTop++;
@@ -43,11 +47,17 @@ static void run(ObaVM* vm) {
 
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
-#define BINARY_OP(op)                                                          \
+
+// TODO(kendal): how do we handle non-numeric ops?
+#define BINARY_OP(type, op)                                                    \
 do {                                                                           \
-  double b = pop(vm);                                                          \
-  double a = pop(vm);                                                          \
-  push(vm, a op b);                                                            \
+  if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {                            \
+    perror("ops must be numbers");                                             \
+    exit(1);                                                                   \
+  }                                                                            \
+  double b = AS_NUMBER(pop(vm));                                               \
+  double a = AS_NUMBER(pop(vm));                                               \
+  push(vm, type(a op b));                                                      \
 } while (0)
 
   // clang-format on
@@ -70,16 +80,16 @@ do {                                                                           \
       push(vm, READ_CONSTANT());
       break;
     case OP_ADD:
-      BINARY_OP(+);
+      BINARY_OP(OBA_NUMBER, +);
       break;
     case OP_MINUS:
-      BINARY_OP(-);
+      BINARY_OP(OBA_NUMBER, -);
       break;
     case OP_MULTIPLY:
-      BINARY_OP(*);
+      BINARY_OP(OBA_NUMBER, *);
       break;
     case OP_DIVIDE:
-      BINARY_OP(/);
+      BINARY_OP(OBA_NUMBER, /);
       break;
     case OP_EXIT:
       return;

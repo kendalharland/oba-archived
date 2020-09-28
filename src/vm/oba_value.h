@@ -3,8 +3,31 @@
 
 #include <stdlib.h>
 
-// TODO(kendal): Replace this with the appropriate type.
-typedef double Value;
+// TODO(kendal):
+// - VM stack holds doubles; needs to hold Values.
+// - Compiler emits double consts; needs to emit Values (strings too).
+// -
+
+// Helper macros for coverting to and from Oba values -------------------------
+
+#define OBA_NUMBER(value) ((Value){VAL_NUMBER, {.number = value}})
+
+#define IS_NUMBER(value) ((value).type == VAL_NUMBER)
+
+#define AS_NUMBER(value) ((value).as.number)
+
+// A tagged-union representing Oba values.
+typedef enum {
+  VAL_NUMBER
+  // TODO(kendal): Bools, objects, strings.
+} ValueType;
+
+typedef struct {
+  ValueType type;
+  union {
+    double number;
+  } as;
+} Value;
 
 // ValueArray is a dynamic array of oba values.
 typedef struct {
