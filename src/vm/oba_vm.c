@@ -28,7 +28,7 @@ void obaFreeVM(ObaVM* vm) {
 }
 
 static Value peek(ObaVM* vm, int lookahead) {
-  return *(vm->stackTop + lookahead);
+  return *(vm->stackTop - lookahead);
 }
 
 static void push(ObaVM* vm, Value value) {
