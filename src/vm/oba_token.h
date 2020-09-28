@@ -40,7 +40,6 @@ typedef struct {
   int line;
 
   // The parsed value if the token is a literal.
-  // TODO(kendal): Define this instead of using 'int'.
   Value value;
 } Token;
 

@@ -1,9 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "oba_memory.h"
 #include "oba_value.h"
+#include "oba_vm.h"
 
 void initValueArray(ValueArray* array) {
   array->capacity = 0;
@@ -27,11 +29,51 @@ void writeValueArray(ValueArray* array, Value value) {
   array->count++;
 }
 
+static Obj* allocateObject(size_t size, ObjType type) {
+  Obj* object = (Obj*)reallocate(NULL, 0, size);
+  object->type = type;
+  return object;
+}
+
+static ObjString* allocateString(char* chars, int length) {
+  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+  string->length = length;
+  string->chars = chars;
+
+  return string;
+}
+
+ObjString* copyString(const char* chars, int length) {
+  char* heapChars = ALLOCATE(char, length + 1);
+  memcpy(heapChars, chars, length);
+  heapChars[length] = '\0';
+
+  return allocateString(heapChars, length);
+}
+
+ObjString* takeString(char* chars, int length) {
+  return allocateString(chars, length);
+}
+
+void printObject(Value value) {
+  Obj* obj = AS_OBJ(value);
+  switch (obj->type) {
+  case OBJ_STRING:
+    printf("%s", AS_CSTRING(value));
+    break;
+  }
+}
+
 void printValue(Value value) {
-  if (IS_NUMBER(value)) {
+  switch (value.type) {
+  case VAL_NUMBER:
     printf("%g", AS_NUMBER(value));
-  } else if (IS_BOOL(value)) {
-    bool v = AS_BOOL(value);
-    printf(v ? "true" : "false");
+    break;
+  case VAL_BOOL:
+    printf(AS_BOOL(value) ? "true" : "false");
+    break;
+  case VAL_OBJ:
+    printObject(value);
+    break;
   }
 }

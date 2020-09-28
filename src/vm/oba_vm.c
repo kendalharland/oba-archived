@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "oba.h"
+#include "oba_memory.h"
 #include "oba_vm.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -58,6 +59,21 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
   resetStack(vm);
 }
 
+static void concatenate(ObaVM* vm) {
+  ObjString* b = AS_STRING(pop(vm));
+  ObjString* a = AS_STRING(pop(vm));
+
+  char* chars = ALLOCATE(char, b->length + a->length);
+  int length = b->length + a->length;
+
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  ObjString* result = takeString(chars, length);
+  push(vm, OBJ_VAL(result));
+}
+
 static ObaInterpretResult run(ObaVM* vm) {
 
   // clang-format off
@@ -65,16 +81,18 @@ static ObaInterpretResult run(ObaVM* vm) {
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
 
-// TODO(kendal): how do we handle non-numeric ops?
 #define BINARY_OP(type, op)                                                    \
 do {                                                                           \
-  if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {                    \
-    runtimeError(vm, "Expected numeric operands to (op)");                     \
+  if (IS_NUMBER(peek(vm, 1)) && IS_NUMBER(peek(vm, 2))) {                      \
+    double b = AS_NUMBER(pop(vm));                                             \
+    double a = AS_NUMBER(pop(vm));                                             \
+    push(vm, type(a op b));                                                    \
+  } else if (IS_STRING(peek(vm, 1)) && IS_STRING(peek(vm, 2))) {               \
+    concatenate(vm);                                                           \
+  } else {                                                                     \
+    runtimeError(vm, "Expected numeric or string operands");                   \
     return OBA_RESULT_RUNTIME_ERROR;                                           \
   }                                                                            \
-  double b = AS_NUMBER(pop(vm));                                               \
-  double a = AS_NUMBER(pop(vm));                                               \
-  push(vm, type(a op b));                                                      \
 } while (0)
 
   // clang-format on

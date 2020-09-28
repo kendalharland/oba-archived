@@ -32,6 +32,7 @@ static void ignoreNewlines(Parser*);
 static void grouping(Parser*, bool);
 static void infixOp(Parser*, bool);
 static void literal(Parser*, bool);
+static void string(Parser*, bool);
 
 // Bytecode -------------------------------------------------------------------
 
@@ -114,7 +115,7 @@ GrammarRule rules[] =  {
   /* TOK_BOOL      */ PREFIX(literal),
   /* TOK_IDENT     */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NUMBER    */ PREFIX(literal),
-  /* TOK_STRING    */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_STRING    */ PREFIX(string),
   /* TOK_NEWLINE   */ UNUSED, 
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
@@ -204,9 +205,21 @@ static void makeBool(Parser* parser, bool value) {
   makeToken(parser, TOK_BOOL);
 }
 
+static void makeString(Parser* parser) { makeToken(parser, TOK_STRING); }
+
 static bool isName(char c) { return isalpha(c) || c == '_'; }
 
 static bool isNumber(char c) { return isdigit(c); }
+
+// Finishes lexing a string.
+static void readString(Parser* parser) {
+  // TODO(kendal): Handle strings with escaped quotes.
+  while (peekChar(parser) != '"') {
+    nextChar(parser);
+  }
+  nextChar(parser);
+  makeString(parser);
+}
 
 // Finishes lexing an identifier.
 static void readName(Parser* parser) {
@@ -280,6 +293,9 @@ static void nextToken(Parser* parser) {
       }
 
       makeToken(parser, TOK_DIVIDE);
+      return;
+    case '"':
+      readString(parser);
       return;
     default:
       if (isName(c)) {
@@ -364,6 +380,12 @@ static void grouping(Parser* parser, bool canAssign) {
   consume(parser, TOK_RPAREN, "Expected ')' after expression.");
 }
 
+static void string(Parser* parser, bool canAssign) {
+  // +1 and -2 to omit the leading and traling '"'.
+  emitConstant(parser, OBJ_VAL(copyString(parser->previous.start + 1,
+                                          parser->previous.length - 2)));
+}
+
 static void literal(Parser* parser, bool canAssign) {
   switch (parser->previous.type) {
   case TOK_BOOL:
@@ -410,7 +432,6 @@ void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
 }
 
-// TODO(kendal): Fix the type instead of using 'int'.
 bool obaCompile(ObaVM* vm, const char* source) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
@@ -426,8 +447,6 @@ bool obaCompile(ObaVM* vm, const char* source) {
   parser.current.start = source;
   parser.current.length = 0;
   parser.current.line = 0;
-  // TODO(kendal): Do we need nil?
-  parser.current.value = OBA_NUMBER(0);
   parser.hasError = false;
 
   nextToken(&parser);
