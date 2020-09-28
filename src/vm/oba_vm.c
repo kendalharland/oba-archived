@@ -108,6 +108,12 @@ do {                                                                           \
     case OP_DIVIDE:
       BINARY_OP(OBA_NUMBER, /);
       break;
+    case OP_TRUE:
+      push(vm, OBA_BOOL(true));
+      break;
+    case OP_FALSE:
+      push(vm, OBA_BOOL(false));
+      break;
     case OP_EXIT:
       return OBA_RESULT_SUCCESS;
     }

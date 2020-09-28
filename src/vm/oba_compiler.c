@@ -57,6 +57,11 @@ static void emitConstant(Parser* parser, Value value) {
   int constant = addConstant(parser, value);
   emitOp(parser, OP_CONSTANT);
   emitByte(parser, constant);
+  return;
+}
+
+static void emitBool(Parser* parser, Value value) {
+  AS_BOOL(value) ? emitOp(parser, OP_TRUE) : emitOp(parser, OP_FALSE);
 }
 
 // Grammar --------------------------------------------------------------------
@@ -106,6 +111,7 @@ GrammarRule rules[] =  {
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
   /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
+  /* TOK_BOOL      */ PREFIX(literal),
   /* TOK_IDENT     */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ UNUSED, // TODO(kendal): This is not correct.
@@ -193,17 +199,31 @@ static void makeNumber(Parser* parser) {
   makeToken(parser, TOK_NUMBER);
 }
 
-static bool isIdent(char c) { return isalpha(c) || c == '_'; }
+static void makeBool(Parser* parser, bool value) {
+  parser->current.value = OBA_BOOL(value);
+  makeToken(parser, TOK_BOOL);
+}
+
+static bool isName(char c) { return isalpha(c) || c == '_'; }
 
 static bool isNumber(char c) { return isdigit(c); }
 
 // Finishes lexing an identifier.
-static void readIdent(Parser* parser) {
-  while (isIdent(peekChar(parser)) || isdigit(peekChar(parser))) {
+static void readName(Parser* parser) {
+  while (isName(peekChar(parser)) || isdigit(peekChar(parser))) {
     nextChar(parser);
   }
+
+  // TODO(kendal): Replace this with a lookup-table of keywords.
+  if (memcmp(parser->tokenStart, "true", 4) == 0) {
+    makeBool(parser, true);
+    return;
+  }
+  if (memcmp(parser->tokenStart, "false", 5) == 0) {
+    makeBool(parser, false);
+    return;
+  }
   makeToken(parser, TOK_IDENT);
-  // TODO(kendal): Handle keywords.
 }
 
 static void readNumber(Parser* parser) {
@@ -262,8 +282,8 @@ static void nextToken(Parser* parser) {
       makeToken(parser, TOK_DIVIDE);
       return;
     default:
-      if (isIdent(c)) {
-        readIdent(parser);
+      if (isName(c)) {
+        readName(parser);
         return;
       }
       if (isNumber(c)) {
@@ -345,14 +365,23 @@ static void grouping(Parser* parser, bool canAssign) {
 }
 
 static void literal(Parser* parser, bool canAssign) {
-  emitConstant(parser, parser->previous.value);
+  switch (parser->previous.type) {
+  case TOK_BOOL:
+    emitBool(parser, parser->previous.value);
+    break;
+  case TOK_NUMBER:
+    emitConstant(parser, parser->previous.value);
+    break;
+  default:
+    error(parser, "Expected a boolean or number value.");
+  }
 }
 
 static void infixOp(Parser* parser, bool canAssign) {
   GrammarRule* rule = getRule(parser->previous.type);
   ignoreNewlines(parser);
 
-  // Compile the right hand side. precedence + 1 makes this left-associative.
+  // Compile the right hand side (right-associative).
   parse(parser, rule->precedence);
   if (strcmp(rule->name, "+") == 0)
     emitOp(parser, OP_ADD);

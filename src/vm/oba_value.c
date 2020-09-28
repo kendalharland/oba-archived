@@ -27,4 +27,11 @@ void writeValueArray(ValueArray* array, Value value) {
   array->count++;
 }
 
-void printValue(Value value) { printf("%g", value); }
+void printValue(Value value) {
+  if (IS_NUMBER(value)) {
+    printf("%g", AS_NUMBER(value));
+  } else if (IS_BOOL(value)) {
+    bool v = AS_BOOL(value);
+    printf(v ? "true" : "false");
+  }
+}
