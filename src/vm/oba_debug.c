@@ -43,7 +43,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
   case OP_FALSE:
     return simpleInstruction("OP_FALSE", chunk, offset);
   case OP_NOT:
-    // TODO(kendal): This is not correct.
     return simpleInstruction("OP_NOT", chunk, offset);
   case OP_GT:
     return simpleInstruction("OP_GT", chunk, offset);
