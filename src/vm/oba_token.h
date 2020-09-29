@@ -8,6 +8,15 @@
 // WARNING: When updating this table, also update the table of GrammarRules in
 // oba_compiler.c.
 typedef enum {
+  TOK_NOT,
+  TOK_ASSIGN,
+  TOK_GT,
+  TOK_LT,
+  TOK_GTE,
+  TOK_LTE,
+  TOK_EQ,
+  TOK_NEQ,
+
   TOK_LPAREN,
   TOK_RPAREN,
   TOK_PLUS,

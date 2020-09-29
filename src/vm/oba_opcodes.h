@@ -15,6 +15,14 @@ typedef enum {
   OP_DIVIDE,
   OP_TRUE,
   OP_FALSE,
+  OP_NOT,
+  OP_GT,
+  OP_LT,
+  OP_GTE,
+  OP_LTE,
+  OP_EQ,
+  OP_NEQ,
+  OP_ASSIGN,
 
   OP_EXIT,
 } OpCode;

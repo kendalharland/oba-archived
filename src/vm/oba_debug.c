@@ -42,6 +42,23 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_TRUE", chunk, offset);
   case OP_FALSE:
     return simpleInstruction("OP_FALSE", chunk, offset);
+  case OP_NOT:
+    // TODO(kendal): This is not correct.
+    return simpleInstruction("OP_NOT", chunk, offset);
+  case OP_GT:
+    return simpleInstruction("OP_GT", chunk, offset);
+  case OP_LT:
+    return simpleInstruction("OP_LT", chunk, offset);
+  case OP_GTE:
+    return simpleInstruction("OP_GTE", chunk, offset);
+  case OP_LTE:
+    return simpleInstruction("OP_LTE", chunk, offset);
+  case OP_EQ:
+    return simpleInstruction("OP_EQ", chunk, offset);
+  case OP_NEQ:
+    return simpleInstruction("OP_NEQ", chunk, offset);
+  case OP_ASSIGN:
+    return simpleInstruction("OP_ASSIGN", chunk, offset);
   case OP_EXIT:
     return simpleInstruction("OP_EXIT", chunk, offset);
   default:

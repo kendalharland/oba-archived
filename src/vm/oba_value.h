@@ -17,7 +17,7 @@
 #define IS_OBJ(value) ((value).type == VAL_OBJ)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
-#define OBJ_TYPE(value) ((Value){AS_OBJ(value)->type})
+#define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 // Macros for converting from Oba to C.
 #define AS_BOOL(value) ((value).as.boolean)
@@ -84,5 +84,6 @@ ObjString* copyString(const char* chars, int length);
 static Obj* allocateObject(size_t size, ObjType type);
 static ObjString* allocateString(char* chars, int length);
 ObjString* takeString(char* chars, int length);
+bool valuesEqual(Value a, Value b);
 
 #endif

@@ -126,6 +126,39 @@ do {                                                                           \
     case OP_DIVIDE:
       BINARY_OP(OBA_NUMBER, /);
       break;
+    case OP_NOT: {
+      if (!IS_BOOL(peek(vm, 1))) {
+        runtimeError(vm, "Expected boolean value");
+        return OBA_RESULT_RUNTIME_ERROR;
+      }
+      push(vm, OBA_BOOL(!AS_BOOL(pop(vm))));
+      break;
+    }
+    case OP_GT:
+      BINARY_OP(OBA_BOOL, >);
+      break;
+    case OP_LT:
+      BINARY_OP(OBA_BOOL, <);
+      break;
+    // TODO(kendal): Bug! This will concatenate if the operands are strings.
+    case OP_GTE:
+      BINARY_OP(OBA_BOOL, >=);
+      break;
+    case OP_LTE:
+      BINARY_OP(OBA_BOOL, <=);
+      break;
+    case OP_EQ: {
+      Value b = pop(vm);
+      Value a = pop(vm);
+      push(vm, OBA_BOOL(valuesEqual(a, b)));
+      break;
+    }
+    case OP_NEQ: {
+      Value b = pop(vm);
+      Value a = pop(vm);
+      push(vm, OBA_BOOL(!valuesEqual(a, b)));
+      break;
+    }
     case OP_TRUE:
       push(vm, OBA_BOOL(true));
       break;

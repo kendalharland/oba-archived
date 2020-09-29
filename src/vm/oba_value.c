@@ -55,6 +55,37 @@ ObjString* takeString(char* chars, int length) {
   return allocateString(chars, length);
 }
 
+bool objectsEqual(Value ao, Value bo) {
+  if (OBJ_TYPE(ao) != OBJ_TYPE(bo))
+    return false;
+
+  switch (OBJ_TYPE(ao)) {
+  case OBJ_STRING: {
+    ObjString* a = AS_STRING(ao);
+    ObjString* b = AS_STRING(bo);
+    return a->length == b->length && strcmp(a->chars, b->chars) == 0;
+  }
+  default:
+    return false; // Unreachable.
+  }
+}
+
+bool valuesEqual(Value a, Value b) {
+  if (a.type != b.type)
+    return false;
+
+  switch (a.type) {
+  case VAL_BOOL:
+    return AS_BOOL(a) == AS_BOOL(b);
+  case VAL_NUMBER:
+    return AS_NUMBER(a) == AS_NUMBER(b);
+  case VAL_OBJ:
+    return objectsEqual(a, b);
+  default:
+    return false; // Unreachable.
+  }
+}
+
 void printObject(Value value) {
   Obj* obj = AS_OBJ(value);
   switch (obj->type) {

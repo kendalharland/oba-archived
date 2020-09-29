@@ -30,6 +30,7 @@ typedef struct {
 // Forward declarations.
 static void ignoreNewlines(Parser*);
 static void grouping(Parser*, bool);
+static void unaryOp(Parser*, bool);
 static void infixOp(Parser*, bool);
 static void literal(Parser*, bool);
 static void string(Parser*, bool);
@@ -72,6 +73,7 @@ static void emitBool(Parser* parser, Value value) {
 typedef enum {
   PREC_NONE,
   PREC_LOWEST,
+  PREC_COND,    // < > <= >= != ==
   PREC_SUM,     // + -
   PREC_PRODUCT, // * /
 } Precedence;
@@ -106,6 +108,14 @@ typedef struct {
 #define INFIX_OPERATOR(prec, name) { NULL, infixOp, prec, name }
 
 GrammarRule rules[] =  {
+  /* TOK_NOT       */ PREFIX(unaryOp),
+  /* TOK_ASSIGN    */ INFIX_OPERATOR(PREC_COND, "="),
+  /* TOK_GT        */ INFIX_OPERATOR(PREC_COND, ">"),
+  /* TOK_LT        */ INFIX_OPERATOR(PREC_COND, "<"),
+  /* TOK_GTE       */ INFIX_OPERATOR(PREC_COND, ">="),
+  /* TOK_LTE       */ INFIX_OPERATOR(PREC_COND, "<="),
+  /* TOK_EQ        */ INFIX_OPERATOR(PREC_COND, "=="),
+  /* TOK_NEQ       */ INFIX_OPERATOR(PREC_COND, "!="),
   /* TOK_LPAREN    */ PREFIX(grouping),  
   /* TOK_RPAREN    */ UNUSED, 
   /* TOK_PLUS      */ INFIX_OPERATOR(PREC_SUM, "+"),
@@ -260,6 +270,14 @@ static void nextToken(Parser* parser) {
   if (parser->current.type == TOK_EOF)
     return;
 
+#define IF_MATCH_NEXT(next, matched, unmatched)                                \
+  do {                                                                         \
+    if (matchChar(parser, next))                                               \
+      makeToken(parser, matched);                                              \
+    else                                                                       \
+      makeToken(parser, unmatched);                                            \
+  } while (0)
+
   while (peekChar(parser) != '\0') {
     parser->tokenStart = parser->currentChar;
     char c = nextChar(parser);
@@ -286,10 +304,22 @@ static void nextToken(Parser* parser) {
     case '*':
       makeToken(parser, TOK_MULTIPLY);
       return;
+    case '!':
+      IF_MATCH_NEXT('=', TOK_NEQ, TOK_NOT);
+      return;
+    case '>':
+      IF_MATCH_NEXT('=', TOK_GTE, TOK_GT);
+      return;
+    case '<':
+      IF_MATCH_NEXT('=', TOK_LTE, TOK_LT);
+      return;
+    case '=':
+      IF_MATCH_NEXT('=', TOK_EQ, TOK_ASSIGN);
+      return;
     case '/':
       if (matchChar(parser, '/')) {
         skipLineComment(parser);
-        break;
+        return;
       }
 
       makeToken(parser, TOK_DIVIDE);
@@ -312,6 +342,8 @@ static void nextToken(Parser* parser) {
       return;
     }
   }
+
+#undef IF_MATCH_NEXT
 
   // No more source left.
   parser->tokenStart = parser->currentChar;
@@ -399,22 +431,71 @@ static void literal(Parser* parser, bool canAssign) {
   }
 }
 
-static void infixOp(Parser* parser, bool canAssign) {
+static void unaryOp(Parser* parser, bool canAssign) {
   GrammarRule* rule = getRule(parser->previous.type);
+  TokenType opType = parser->previous.type;
+
   ignoreNewlines(parser);
 
   // Compile the right hand side (right-associative).
   parse(parser, rule->precedence);
-  if (strcmp(rule->name, "+") == 0)
-    emitOp(parser, OP_ADD);
-  else if (strcmp(rule->name, "-") == 0)
-    emitOp(parser, OP_MINUS);
-  else if (strcmp(rule->name, "*") == 0)
-    emitOp(parser, OP_MULTIPLY);
-  else if (strcmp(rule->name, "/") == 0)
-    emitOp(parser, OP_DIVIDE);
-  else
+
+  switch (opType) {
+  case TOK_NOT:
+    emitOp(parser, OP_NOT);
+    break;
+  default:
     error(parser, "Invalid operator %s", rule->name);
+  }
+}
+
+static void infixOp(Parser* parser, bool canAssign) {
+  GrammarRule* rule = getRule(parser->previous.type);
+  TokenType opType = parser->previous.type;
+
+  ignoreNewlines(parser);
+
+  // Compile the right hand side (right-associative).
+  parse(parser, rule->precedence);
+
+  switch (opType) {
+  case TOK_PLUS:
+    emitOp(parser, OP_ADD);
+    return;
+  case TOK_MINUS:
+    emitOp(parser, OP_MINUS);
+    return;
+  case TOK_MULTIPLY:
+    emitOp(parser, OP_MULTIPLY);
+    return;
+  case TOK_DIVIDE:
+    emitOp(parser, OP_DIVIDE);
+    return;
+  case TOK_GT:
+    emitOp(parser, OP_GT);
+    return;
+  case TOK_LT:
+    emitOp(parser, OP_LT);
+    return;
+  case TOK_GTE:
+    emitOp(parser, OP_GTE);
+    return;
+  case TOK_LTE:
+    emitOp(parser, OP_LTE);
+    return;
+  case TOK_EQ:
+    emitOp(parser, OP_EQ);
+    return;
+  case TOK_NEQ:
+    emitOp(parser, OP_NEQ);
+    return;
+  case TOK_ASSIGN:
+    emitOp(parser, OP_ASSIGN);
+    return;
+  default:
+    error(parser, "Invalid operator %s", rule->name);
+    return;
+  }
 }
 
 // Compiling ------------------------------------------------------------------
