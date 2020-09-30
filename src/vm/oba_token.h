@@ -24,8 +24,6 @@ typedef enum {
   TOK_MULTIPLY,
   TOK_DIVIDE,
 
-  TOK_TRUE,
-  TOK_FALSE,
   TOK_IDENT,
   TOK_NUMBER,
 
@@ -33,7 +31,11 @@ typedef enum {
   TOK_STRING,
   TOK_NEWLINE,
 
+  // Keywords
   TOK_DEBUG,
+  TOK_LET,
+  TOK_TRUE,
+  TOK_FALSE,
 
   TOK_ERROR,
   TOK_EOF,

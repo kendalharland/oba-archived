@@ -24,6 +24,8 @@ typedef enum {
   OP_NEQ,
   OP_ASSIGN,
   OP_DEBUG,
+  OP_DEFINE_GLOBAL,
+  OP_GET_GLOBAL,
 
   OP_EXIT,
 } OpCode;

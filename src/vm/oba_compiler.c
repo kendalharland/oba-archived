@@ -32,6 +32,7 @@ static void ignoreNewlines(Parser*);
 static void grouping(Parser*, bool);
 static void unaryOp(Parser*, bool);
 static void infixOp(Parser*, bool);
+static void identifier(Parser*, bool);
 static void literal(Parser*, bool);
 static void string(Parser*, bool);
 
@@ -59,11 +60,22 @@ static void emitConstant(Parser* parser, Value value) {
   int constant = addConstant(parser, value);
   emitOp(parser, OP_CONSTANT);
   emitByte(parser, constant);
-  return;
 }
 
 static void emitBool(Parser* parser, Value value) {
   AS_BOOL(value) ? emitOp(parser, OP_TRUE) : emitOp(parser, OP_FALSE);
+}
+
+static void defineGlobal(Parser* parser, Value name) {
+  int global = addConstant(parser, name);
+  emitOp(parser, OP_DEFINE_GLOBAL);
+  emitByte(parser, global);
+}
+
+static void getGlobal(Parser* parser, Value name) {
+  int global = addConstant(parser, name);
+  emitOp(parser, OP_GET_GLOBAL);
+  emitByte(parser, global);
 }
 
 // Grammar --------------------------------------------------------------------
@@ -122,13 +134,14 @@ GrammarRule rules[] =  {
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
   /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
-  /* TOK_TRUE      */ PREFIX(literal),
-  /* TOK_FALSE     */ PREFIX(literal),
-  /* TOK_IDENT     */ UNUSED, // TODO(kendal): This is not correct.
+  /* TOK_IDENT     */ PREFIX(identifier),
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ PREFIX(string),
   /* TOK_NEWLINE   */ UNUSED, 
   /* TOK_DEBUG     */ UNUSED,
+  /* TOK_LET       */ UNUSED,
+  /* TOK_TRUE      */ PREFIX(literal),
+  /* TOK_FALSE     */ PREFIX(literal),
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -138,7 +151,6 @@ static GrammarRule* getRule(TokenType type) {
   return &rules[type];
 }
 
-
 typedef struct {
   const char* lexeme;
   size_t length;
@@ -147,8 +159,9 @@ typedef struct {
 
 static Keyword keywords[] = {
     {"debug", 5, TOK_DEBUG},
-    {"true",  4, TOK_TRUE},
     {"false", 5, TOK_FALSE},
+    {"let",   3, TOK_LET},
+    {"true",  4, TOK_TRUE},
     {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
@@ -416,6 +429,16 @@ static void parse(Parser* parser, int precedence) {
 
 static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
 
+static void assignStmt(Parser* parser) {
+  consume(parser, TOK_IDENT, "Expected an identifier.");
+  Value name =
+      OBJ_VAL(copyString(parser->previous.start, parser->previous.length));
+
+  consume(parser, TOK_ASSIGN, "Expected '='");
+  expression(parser);
+  defineGlobal(parser, name);
+}
+
 static void debugStmt(Parser* parser) {
   expression(parser);
   emitOp(parser, OP_DEBUG);
@@ -424,12 +447,18 @@ static void debugStmt(Parser* parser) {
 static void statement(Parser* parser) {
   if (match(parser, TOK_DEBUG)) {
     debugStmt(parser);
-    return;
+  } else {
+    expression(parser);
   }
-  expression(parser);
 }
 
-static void declaration(Parser* parser) { statement(parser); }
+static void declaration(Parser* parser) {
+  if (match(parser, TOK_LET)) {
+    assignStmt(parser);
+  } else {
+    statement(parser);
+  }
+}
 
 // A parenthesized expression.
 static void grouping(Parser* parser, bool canAssign) {
@@ -441,6 +470,12 @@ static void string(Parser* parser, bool canAssign) {
   // +1 and -2 to omit the leading and traling '"'.
   emitConstant(parser, OBJ_VAL(copyString(parser->previous.start + 1,
                                           parser->previous.length - 2)));
+}
+
+static void identifier(Parser* parser, bool canAssign) {
+  Value name =
+      OBJ_VAL(copyString(parser->previous.start, parser->previous.length));
+  getGlobal(parser, name);
 }
 
 static void literal(Parser* parser, bool canAssign) {

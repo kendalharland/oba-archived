@@ -2,6 +2,7 @@
 #define oba_value_h
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 // Helper macros for coverting to and from Oba values -------------------------
@@ -40,6 +41,7 @@ typedef struct {
   Obj obj;
   int length;
   char* chars;
+  uint32_t hash;
 } ObjString;
 
 // A tagged-union representing Oba values.
@@ -82,7 +84,7 @@ void printValue(Value value);
 
 ObjString* copyString(const char* chars, int length);
 static Obj* allocateObject(size_t size, ObjType type);
-static ObjString* allocateString(char* chars, int length);
+static ObjString* allocateString(char* chars, int length, uint32_t hash);
 ObjString* takeString(char* chars, int length);
 bool valuesEqual(Value a, Value b);
 

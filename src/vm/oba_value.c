@@ -35,24 +35,40 @@ static Obj* allocateObject(size_t size, ObjType type) {
   return object;
 }
 
-static ObjString* allocateString(char* chars, int length) {
+// FNV-1a hash function
+// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function.
+static ObjString* allocateString(char* chars, int length, uint32_t hash) {
   ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   string->length = length;
   string->chars = chars;
+  string->hash = hash;
 
   return string;
+}
+
+static uint32_t hashString(const char* key, int length) {
+  uint32_t hash = 2166136261u;
+
+  for (int i = 0; i < length; i++) {
+    hash ^= key[i];
+    hash *= 16777619;
+  }
+
+  return hash;
 }
 
 ObjString* copyString(const char* chars, int length) {
   char* heapChars = ALLOCATE(char, length + 1);
   memcpy(heapChars, chars, length);
   heapChars[length] = '\0';
+  uint32_t hash = hashString(heapChars, length);
 
-  return allocateString(heapChars, length);
+  return allocateString(heapChars, length, hash);
 }
 
 ObjString* takeString(char* chars, int length) {
-  return allocateString(chars, length);
+  uint32_t hash = hashString(chars, length);
+  return allocateString(chars, length, hash);
 }
 
 bool objectsEqual(Value ao, Value bo) {

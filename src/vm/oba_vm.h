@@ -9,19 +9,23 @@
 // TODO(kendal): Support dynamically resizing the stack.
 #define STACK_MAX 256
 
-// TODO(kendal): List:
-// - Create a chunk type to represent compiled bytecode.
-// - Wirte up the compiler to feed instructions to the VM.
-// - Create disassembler to format compiled bytecode instructions.
-// - Write up the VM to decode the compiled chunks.
+#define TABLE_MAX_LOAD 0.75
+
+typedef struct sTable Table;
+typedef struct sEntry Entry;
+
 struct ObaVM {
   Compiler* compiler;
+
+  // The bytecode to execute.
   Chunk* chunk;
+
+  // Points to the current instruction in chunk.
+  uint8_t* ip;
 
   Value stack[STACK_MAX];
   Value* stackTop;
-
-  uint8_t* ip;
+  Table* globals;
 };
 
 #endif

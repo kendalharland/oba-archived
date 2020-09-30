@@ -27,11 +27,8 @@ static char* read(void) {
   return line;
 }
 
-static ObaInterpretResult interpret(char* input) {
-  // TODO(kendal): the repl should use the same VM each time.
-  ObaVM* vm = obaNewVM();
+static ObaInterpretResult interpret(ObaVM* vm, char* input) {
   ObaInterpretResult result = obaInterpret(vm, input);
-  obaFreeVM(vm);
   return result;
 }
 
@@ -42,16 +39,18 @@ static void repl(void) {
   // Print banner.
   printf("oba %s\n", OBA_VERSION_STRING);
   printf("Press ctrl+d to exit\n");
+  ObaVM* vm = obaNewVM();
 
   do {
     printf(PROMPT);
     input = read();
-    result = interpret(input);
+    result = interpret(vm, input);
     if (input != NULL)
       free(input);
   } while (!feof(stdin));
 
   printf("exiting. \n");
+  obaFreeVM(vm);
 }
 
 static char* readFile(const char* filename) {
@@ -83,8 +82,10 @@ static char* readFile(const char* filename) {
 
 static void runFile(const char* filename) {
   char* source = readFile(filename);
-  ObaInterpretResult result = interpret(source);
+  ObaVM* vm = obaNewVM();
+  ObaInterpretResult result = interpret(vm, source);
   free(source);
+  obaFreeVM(vm);
 
   if (result == OBA_RESULT_COMPILE_ERROR)
     exit(EXIT_COMPILE_ERROR);
