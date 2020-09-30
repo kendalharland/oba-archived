@@ -165,6 +165,12 @@ do {                                                                           \
     case OP_FALSE:
       push(vm, OBA_BOOL(false));
       break;
+    case OP_DEBUG: {
+      Value value = pop(vm);
+      printf("DEBUG: ");
+      printValue(value);
+      printf("\n");
+    }
     case OP_EXIT:
       return OBA_RESULT_SUCCESS;
     }

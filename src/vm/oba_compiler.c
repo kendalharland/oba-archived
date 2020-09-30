@@ -122,7 +122,8 @@ GrammarRule rules[] =  {
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
   /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
-  /* TOK_BOOL      */ PREFIX(literal),
+  /* TOK_TRUE      */ PREFIX(literal),
+  /* TOK_FALSE     */ PREFIX(literal),
   /* TOK_IDENT     */ UNUSED, // TODO(kendal): This is not correct.
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ PREFIX(string),
@@ -137,16 +138,21 @@ static GrammarRule* getRule(TokenType type) {
   return &rules[type];
 }
 
-// clang-format on
 
 typedef struct {
   const char* lexeme;
+  size_t length;
   TokenType type;
 } Keyword;
 
 static Keyword keywords[] = {
-    {"debug", TOK_DEBUG},
+    {"debug", 5, TOK_DEBUG},
+    {"true",  4, TOK_TRUE},
+    {"false", 5, TOK_FALSE},
+    {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
+
+// clang-format on
 
 // Lexing ---------------------------------------------------------------------
 
@@ -220,11 +226,6 @@ static void makeNumber(Parser* parser) {
   makeToken(parser, TOK_NUMBER);
 }
 
-static void makeBool(Parser* parser, bool value) {
-  parser->current.value = OBA_BOOL(value);
-  makeToken(parser, TOK_BOOL);
-}
-
 static void makeString(Parser* parser) { makeToken(parser, TOK_STRING); }
 
 static bool isName(char c) { return isalpha(c) || c == '_'; }
@@ -247,14 +248,13 @@ static void readName(Parser* parser) {
     nextChar(parser);
   }
 
-  // TODO(kendal): Replace this with a lookup-table of keywords.
-  if (memcmp(parser->tokenStart, "true", 4) == 0) {
-    makeBool(parser, true);
-    return;
-  }
-  if (memcmp(parser->tokenStart, "false", 5) == 0) {
-    makeBool(parser, false);
-    return;
+  size_t length = parser->currentChar - parser->tokenStart;
+  for (int i = 0; keywords[i].lexeme != NULL; i++) {
+    if (length == keywords[i].length &&
+        memcmp(parser->tokenStart, keywords[i].lexeme, length) == 0) {
+      makeToken(parser, keywords[i].type);
+      return;
+    }
   }
   makeToken(parser, TOK_IDENT);
 }
@@ -414,9 +414,12 @@ static void parse(Parser* parser, int precedence) {
   }
 }
 
-static void debugStmt(Parser* parser) { emitOp(parser, OP_DEBUG); }
-
 static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
+
+static void debugStmt(Parser* parser) {
+  expression(parser);
+  emitOp(parser, OP_DEBUG);
+}
 
 static void statement(Parser* parser) {
   if (match(parser, TOK_DEBUG)) {
@@ -442,8 +445,11 @@ static void string(Parser* parser, bool canAssign) {
 
 static void literal(Parser* parser, bool canAssign) {
   switch (parser->previous.type) {
-  case TOK_BOOL:
-    emitBool(parser, parser->previous.value);
+  case TOK_TRUE:
+    emitBool(parser, OBA_BOOL(true));
+    break;
+  case TOK_FALSE:
+    emitBool(parser, OBA_BOOL(false));
     break;
   case TOK_NUMBER:
     emitConstant(parser, parser->previous.value);

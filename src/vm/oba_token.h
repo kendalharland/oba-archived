@@ -24,7 +24,8 @@ typedef enum {
   TOK_MULTIPLY,
   TOK_DIVIDE,
 
-  TOK_BOOL,
+  TOK_TRUE,
+  TOK_FALSE,
   TOK_IDENT,
   TOK_NUMBER,
 
