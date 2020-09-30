@@ -342,7 +342,7 @@ static void nextToken(Parser* parser) {
     case '/':
       if (matchChar(parser, '/')) {
         skipLineComment(parser);
-        return;
+        break;
       }
 
       makeToken(parser, TOK_DIVIDE);
@@ -413,7 +413,7 @@ static void parse(Parser* parser, int precedence) {
 
   GrammarFn prefix = rules[token.type].prefix;
   if (prefix == NULL) {
-    error(parser, "Parse error");
+    error(parser, "Parse error %d", token.type);
     return;
   }
 

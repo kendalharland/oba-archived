@@ -16,14 +16,12 @@ typedef enum {
   TOK_LTE,
   TOK_EQ,
   TOK_NEQ,
-
   TOK_LPAREN,
   TOK_RPAREN,
   TOK_PLUS,
   TOK_MINUS,
   TOK_MULTIPLY,
   TOK_DIVIDE,
-
   TOK_IDENT,
   TOK_NUMBER,
 
