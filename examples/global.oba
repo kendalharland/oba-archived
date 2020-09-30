@@ -1,2 +1,7 @@
 let x = 20
-debug x
+let y = 30
+debug x * y
+
+let h = "Hello, "
+let w = "World!"
+debug h + w
