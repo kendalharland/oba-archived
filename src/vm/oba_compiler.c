@@ -127,6 +127,7 @@ GrammarRule rules[] =  {
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ PREFIX(string),
   /* TOK_NEWLINE   */ UNUSED, 
+  /* TOK_DEBUG     */ UNUSED,
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -137,6 +138,15 @@ static GrammarRule* getRule(TokenType type) {
 }
 
 // clang-format on
+
+typedef struct {
+  const char* lexeme;
+  TokenType type;
+} Keyword;
+
+static Keyword keywords[] = {
+    {"debug", TOK_DEBUG},
+};
 
 // Lexing ---------------------------------------------------------------------
 
@@ -404,7 +414,19 @@ static void parse(Parser* parser, int precedence) {
   }
 }
 
+static void debugStmt(Parser* parser) { emitOp(parser, OP_DEBUG); }
+
 static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
+
+static void statement(Parser* parser) {
+  if (match(parser, TOK_DEBUG)) {
+    debugStmt(parser);
+    return;
+  }
+  expression(parser);
+}
+
+static void declaration(Parser* parser) { statement(parser); }
 
 // A parenthesized expression.
 static void grouping(Parser* parser, bool canAssign) {
@@ -537,7 +559,7 @@ bool obaCompile(ObaVM* vm, const char* source) {
   ignoreNewlines(&parser);
 
   while (!match(compiler.parser, TOK_EOF)) {
-    expression(compiler.parser);
+    declaration(compiler.parser);
     // If no newline, the file must end on this line.
     if (!matchLine(compiler.parser)) {
       consume(compiler.parser, TOK_EOF, "Expected end of file.");

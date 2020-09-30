@@ -23,6 +23,7 @@ typedef enum {
   OP_EQ,
   OP_NEQ,
   OP_ASSIGN,
+  OP_DEBUG,
 
   OP_EXIT,
 } OpCode;

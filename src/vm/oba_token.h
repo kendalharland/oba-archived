@@ -32,6 +32,8 @@ typedef enum {
   TOK_STRING,
   TOK_NEWLINE,
 
+  TOK_DEBUG,
+
   TOK_ERROR,
   TOK_EOF,
 } TokenType;
