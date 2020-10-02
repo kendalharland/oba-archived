@@ -279,6 +279,11 @@ do {                                                                           \
       push(vm, value);
       break;
     }
+    case OP_GET_LOCAL: {
+      // Locals live on the top of the stack.
+      push(vm, peek(vm, 1));
+      break;
+    }
     case OP_DEBUG: {
       Value value = pop(vm);
       printf("DEBUG: ");

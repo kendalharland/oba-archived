@@ -33,7 +33,7 @@ typedef struct {
 } Local;
 
 struct sCompiler {
-  Local* locals[MAX_LOCALS];
+  Local locals[MAX_LOCALS];
   int localCount;
   int currentScope;
   Parser* parser;
@@ -50,7 +50,7 @@ void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
 }
 
-// Forward declarations.
+// Forward declarations because the grammar is recursive.
 static void ignoreNewlines(Compiler*);
 static void grouping(Compiler*, bool);
 static void unaryOp(Compiler*, bool);
@@ -58,6 +58,8 @@ static void infixOp(Compiler*, bool);
 static void identifier(Compiler*, bool);
 static void literal(Compiler*, bool);
 static void string(Compiler*, bool);
+
+static void declaration(Compiler*);
 
 // Bytecode -------------------------------------------------------------------
 
@@ -91,16 +93,63 @@ static void emitBool(Compiler* compiler, Value value) {
   AS_BOOL(value) ? emitOp(compiler, OP_TRUE) : emitOp(compiler, OP_FALSE);
 }
 
-static void defineGlobal(Compiler* compiler, Value name) {
-  int global = addConstant(compiler, name);
+static int declareGlobal(Compiler* compiler, Value name) {
+  return addConstant(compiler, name);
+}
+
+static void defineGlobal(Compiler* compiler, int global) {
   emitOp(compiler, OP_DEFINE_GLOBAL);
   emitByte(compiler, global);
+}
+
+static void addLocal(Compiler* compiler) {
+  Local local = compiler->locals[compiler->localCount++];
+  local.scopeDepth = compiler->currentScope;
+  local.token = compiler->parser->previous;
+}
+
+static int declareVariable(Compiler* compiler, Value name) {
+  if (compiler->currentScope > 0) {
+    addLocal(compiler);
+    // Locals live on the stack, so we didn't add a constant. Return a dummy
+    // value.
+    return 0;
+  }
+  return addConstant(compiler, name);
+}
+
+static void defineVariable(Compiler* compiler, int variable) {
+  // Local variables live on the stack, so we don't need to define anything.
+  if (compiler->currentScope > 0)
+    return;
+
+  defineGlobal(compiler, variable);
 }
 
 static void getGlobal(Compiler* compiler, Value name) {
   int global = addConstant(compiler, name);
   emitOp(compiler, OP_GET_GLOBAL);
   emitByte(compiler, global);
+}
+
+static void getLocal(Compiler* compiler, Value name) {
+  int global = addConstant(compiler, name);
+  emitOp(compiler, OP_GET_LOCAL);
+  emitByte(compiler, global);
+}
+
+// Finds a local variabled named [name] in the current scope.
+// Returns a negative number if it is not found.
+static int lookupLocal(Compiler* compiler, Value name) { return -1; }
+
+static void getVariable(Compiler* compiler, Value name) {
+  uint8_t getOp;
+  int local = lookupLocal(compiler, name);
+  if (local < 0) {
+    getGlobal(compiler, name);
+  } else {
+    getLocal(compiler, name);
+  }
 }
 
 // Grammar --------------------------------------------------------------------
@@ -350,6 +399,12 @@ static void nextToken(Compiler* compiler) {
     case ')':
       makeToken(compiler, TOK_RPAREN);
       return;
+    case '{':
+      makeToken(compiler, TOK_LBRACK);
+      return;
+    case '}':
+      makeToken(compiler, TOK_RBRACK);
+      return;
     case '+':
       makeToken(compiler, TOK_PLUS);
       return;
@@ -463,12 +518,18 @@ static void expression(Compiler* compiler) { parse(compiler, PREC_LOWEST); }
 
 static void assignStmt(Compiler* compiler) {
   consume(compiler, TOK_IDENT, "Expected an identifier.");
+  // Get the name, but don't declare it yet; A variable should not be in scope
+  // in its own initializer.
   Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
                                   compiler->parser->previous.length));
 
+  // Compile the initializer.
   consume(compiler, TOK_ASSIGN, "Expected '='");
   expression(compiler);
-  defineGlobal(compiler, name);
+
+  // Now define the variable.
+  int variable = declareVariable(compiler, name);
+  defineVariable(compiler, variable);
 }
 
 static void debugStmt(Compiler* compiler) {
@@ -476,11 +537,21 @@ static void debugStmt(Compiler* compiler) {
   emitOp(compiler, OP_DEBUG);
 }
 
-static void enterScope(Compiler* compiler) { return; }
-static void exitScope(Compiler* compiler) { return; }
+static void enterScope(Compiler* compiler) { compiler->currentScope++; }
+static void exitScope(Compiler* compiler) { compiler->currentScope--; }
 
 static void block(Compiler* compiler) {
   enterScope(compiler);
+
+  ignoreNewlines(compiler);
+
+  do {
+    declaration(compiler);
+    ignoreNewlines(compiler);
+  } while (peek(compiler) != TOK_RBRACK && peek(compiler) != TOK_EOF);
+
+  ignoreNewlines(compiler);
+  consume(compiler, TOK_RBRACK, "Expected '}' at the end of block");
   exitScope(compiler);
 }
 
@@ -518,7 +589,7 @@ static void string(Compiler* compiler, bool canAssign) {
 static void identifier(Compiler* compiler, bool canAssign) {
   Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
                                   compiler->parser->previous.length));
-  getGlobal(compiler, name);
+  getVariable(compiler, name);
 }
 
 static void literal(Compiler* compiler, bool canAssign) {

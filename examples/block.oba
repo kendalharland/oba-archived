@@ -1,0 +1,11 @@
+let x = 10
+debug x
+
+{ 
+  let x = 20
+  let y = 30
+  debug x + y
+}
+
+// Error: undefined; out of scope
+debug y
