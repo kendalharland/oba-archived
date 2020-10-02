@@ -27,55 +27,80 @@ typedef struct {
   int currentLine;
 } Parser;
 
+typedef struct {
+  Token token;
+  int scopeDepth;
+} Local;
+
+struct sCompiler {
+  Local* locals[MAX_LOCALS];
+  int localCount;
+  int currentScope;
+  Parser* parser;
+};
+
+void initCompiler(Compiler* compiler, Parser* parser) {
+  compiler->parser = parser;
+  compiler->parser->vm->compiler = compiler;
+  compiler->localCount = 0;
+  compiler->currentScope = 0;
+
+  compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
+  initChunk(compiler->parser->vm->chunk);
+  compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
+}
+
 // Forward declarations.
-static void ignoreNewlines(Parser*);
-static void grouping(Parser*, bool);
-static void unaryOp(Parser*, bool);
-static void infixOp(Parser*, bool);
-static void identifier(Parser*, bool);
-static void literal(Parser*, bool);
-static void string(Parser*, bool);
+static void ignoreNewlines(Compiler*);
+static void grouping(Compiler*, bool);
+static void unaryOp(Compiler*, bool);
+static void infixOp(Compiler*, bool);
+static void identifier(Compiler*, bool);
+static void literal(Compiler*, bool);
+static void string(Compiler*, bool);
 
 // Bytecode -------------------------------------------------------------------
 
-static void emitByte(Parser* parser, int byte) {
-  writeChunk(parser->vm->chunk, byte);
+static void emitByte(Compiler* compiler, int byte) {
+  writeChunk(compiler->parser->vm->chunk, byte);
 }
 
-static void emitOp(Parser* parser, OpCode code) { emitByte(parser, code); }
+static void emitOp(Compiler* compiler, OpCode code) {
+  emitByte(compiler, code);
+}
 
 // Adds [value] the the Vm's constant pool.
 // Returns the address of the new constant within the pool.
-static int addConstant(Parser* parser, Value value) {
-  writeValueArray(&parser->vm->chunk->constants, value);
-  return parser->vm->chunk->constants.count - 1;
+static int addConstant(Compiler* compiler, Value value) {
+  writeValueArray(&compiler->parser->vm->chunk->constants, value);
+  return compiler->parser->vm->chunk->constants.count - 1;
 }
 
 // Registers [value] as a constant value.
 //
 // Constants are OP_CONSTANT followed by a 16-bit argument which points to
 // the constant's location in the constant pool.
-static void emitConstant(Parser* parser, Value value) {
+static void emitConstant(Compiler* compiler, Value value) {
   // Register the constant in the VM's constant pool.
-  int constant = addConstant(parser, value);
-  emitOp(parser, OP_CONSTANT);
-  emitByte(parser, constant);
+  int constant = addConstant(compiler, value);
+  emitOp(compiler, OP_CONSTANT);
+  emitByte(compiler, constant);
 }
 
-static void emitBool(Parser* parser, Value value) {
-  AS_BOOL(value) ? emitOp(parser, OP_TRUE) : emitOp(parser, OP_FALSE);
+static void emitBool(Compiler* compiler, Value value) {
+  AS_BOOL(value) ? emitOp(compiler, OP_TRUE) : emitOp(compiler, OP_FALSE);
 }
 
-static void defineGlobal(Parser* parser, Value name) {
-  int global = addConstant(parser, name);
-  emitOp(parser, OP_DEFINE_GLOBAL);
-  emitByte(parser, global);
+static void defineGlobal(Compiler* compiler, Value name) {
+  int global = addConstant(compiler, name);
+  emitOp(compiler, OP_DEFINE_GLOBAL);
+  emitByte(compiler, global);
 }
 
-static void getGlobal(Parser* parser, Value name) {
-  int global = addConstant(parser, name);
-  emitOp(parser, OP_GET_GLOBAL);
-  emitByte(parser, global);
+static void getGlobal(Compiler* compiler, Value name) {
+  int global = addConstant(compiler, name);
+  emitOp(compiler, OP_GET_GLOBAL);
+  emitByte(compiler, global);
 }
 
 // Grammar --------------------------------------------------------------------
@@ -90,7 +115,7 @@ typedef enum {
   PREC_PRODUCT, // * /
 } Precedence;
 
-typedef void (*GrammarFn)(Parser*, bool canAssign);
+typedef void (*GrammarFn)(Compiler*, bool canAssign);
 
 // Oba grammar rules.
 //
@@ -130,6 +155,8 @@ GrammarRule rules[] =  {
   /* TOK_NEQ       */ INFIX_OPERATOR(PREC_COND, "!="),
   /* TOK_LPAREN    */ PREFIX(grouping),  
   /* TOK_RPAREN    */ UNUSED, 
+  /* TOK_LBRACK    */ UNUSED,  
+  /* TOK_RBRACK    */ UNUSED, 
   /* TOK_PLUS      */ INFIX_OPERATOR(PREC_SUM, "+"),
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
@@ -169,7 +196,7 @@ static Keyword keywords[] = {
 
 // Lexing ---------------------------------------------------------------------
 
-static void printError(Parser* parser, int line, const char* label,
+static void printError(Compiler* compiler, int line, const char* label,
                        const char* format, va_list args) {
   char message[1024];
   int length = sprintf(message, "%s: ", label);
@@ -178,154 +205,159 @@ static void printError(Parser* parser, int line, const char* label,
   printf("%s\n", message);
 }
 
-static void lexError(Parser* parser, const char* format, ...) {
-  parser->hasError = true;
+static void lexError(Compiler* compiler, const char* format, ...) {
+  compiler->parser->hasError = true;
 
   va_list args;
   va_start(args, format);
-  printError(parser, parser->currentLine, "Error", format, args);
+  printError(compiler, compiler->parser->currentLine, "Error", format, args);
   va_end(args);
 }
 
-static void error(Parser* parser, const char* format, ...) {
-  parser->hasError = true;
+static void error(Compiler* compiler, const char* format, ...) {
+  compiler->parser->hasError = true;
 
   // The lexer already reported this error.
-  if (parser->previous.type == TOK_ERROR)
+  if (compiler->parser->previous.type == TOK_ERROR)
     return;
 
   va_list args;
   va_start(args, format);
-  printError(parser, parser->currentLine, "Error", format, args);
+  printError(compiler, compiler->parser->currentLine, "Error", format, args);
   va_end(args);
 }
 
 // Parsing --------------------------------------------------------------------
 
-static char peekChar(Parser* parser) { return *parser->currentChar; }
+static char peekChar(Compiler* compiler) {
+  return *compiler->parser->currentChar;
+}
 
-static char nextChar(Parser* parser) {
-  char c = peekChar(parser);
-  parser->currentChar++;
+static char nextChar(Compiler* compiler) {
+  char c = peekChar(compiler);
+  compiler->parser->currentChar++;
   if (c == '\n')
-    parser->currentLine++;
+    compiler->parser->currentLine++;
   return c;
 }
 
-static bool matchChar(Parser* parser, char c) {
-  if (peekChar(parser) != c)
+static bool matchChar(Compiler* compiler, char c) {
+  if (peekChar(compiler) != c)
     return false;
-  nextChar(parser);
+  nextChar(compiler);
   return true;
 }
 
 // Returns the type of the current token.
-static TokenType peek(Parser* parser) { return parser->current.type; }
+static TokenType peek(Compiler* compiler) {
+  return compiler->parser->current.type;
+}
 
-static void makeToken(Parser* parser, TokenType type) {
-  parser->current.type = type;
-  parser->current.start = parser->tokenStart;
-  parser->current.length = (int)(parser->currentChar - parser->tokenStart);
-  parser->current.line = parser->currentLine;
+static void makeToken(Compiler* compiler, TokenType type) {
+  compiler->parser->current.type = type;
+  compiler->parser->current.start = compiler->parser->tokenStart;
+  compiler->parser->current.length =
+      (int)(compiler->parser->currentChar - compiler->parser->tokenStart);
+  compiler->parser->current.line = compiler->parser->currentLine;
 
   // Make line tokens appear on the line containing the "\n".
   if (type == TOK_NEWLINE)
-    parser->current.line--;
+    compiler->parser->current.line--;
 }
 
-static void makeNumber(Parser* parser) {
-  double value = strtod(parser->tokenStart, NULL);
-  parser->current.value = OBA_NUMBER(value);
-  makeToken(parser, TOK_NUMBER);
+static void makeNumber(Compiler* compiler) {
+  double value = strtod(compiler->parser->tokenStart, NULL);
+  compiler->parser->current.value = OBA_NUMBER(value);
+  makeToken(compiler, TOK_NUMBER);
 }
 
-static void makeString(Parser* parser) { makeToken(parser, TOK_STRING); }
+static void makeString(Compiler* compiler) { makeToken(compiler, TOK_STRING); }
 
 static bool isName(char c) { return isalpha(c) || c == '_'; }
 
 static bool isNumber(char c) { return isdigit(c); }
 
 // Finishes lexing a string.
-static void readString(Parser* parser) {
+static void readString(Compiler* compiler) {
   // TODO(kendal): Handle strings with escaped quotes.
-  while (peekChar(parser) != '"') {
-    nextChar(parser);
+  while (peekChar(compiler) != '"') {
+    nextChar(compiler);
   }
-  nextChar(parser);
-  makeString(parser);
+  nextChar(compiler);
+  makeString(compiler);
 }
 
 // Finishes lexing an identifier.
-static void readName(Parser* parser) {
-  while (isName(peekChar(parser)) || isdigit(peekChar(parser))) {
-    nextChar(parser);
+static void readName(Compiler* compiler) {
+  while (isName(peekChar(compiler)) || isdigit(peekChar(compiler))) {
+    nextChar(compiler);
   }
 
-  size_t length = parser->currentChar - parser->tokenStart;
+  size_t length = compiler->parser->currentChar - compiler->parser->tokenStart;
   for (int i = 0; keywords[i].lexeme != NULL; i++) {
     if (length == keywords[i].length &&
-        memcmp(parser->tokenStart, keywords[i].lexeme, length) == 0) {
-      makeToken(parser, keywords[i].type);
+        memcmp(compiler->parser->tokenStart, keywords[i].lexeme, length) == 0) {
+      makeToken(compiler, keywords[i].type);
       return;
     }
   }
-  makeToken(parser, TOK_IDENT);
+  makeToken(compiler, TOK_IDENT);
 }
 
-static void readNumber(Parser* parser) {
-  while (isNumber(peekChar(parser))) {
-    nextChar(parser);
+static void readNumber(Compiler* compiler) {
+  while (isNumber(peekChar(compiler))) {
+    nextChar(compiler);
   }
-  makeNumber(parser);
+  makeNumber(compiler);
 }
 
-static void skipLineComment(Parser* parser) {
+static void skipLineComment(Compiler* compiler) {
   // A comment goes until the end of the line.
-  while (peekChar(parser) != '\n' && peekChar(parser) != '\0') {
-    nextChar(parser);
+  while (peekChar(compiler) != '\n' && peekChar(compiler) != '\0') {
+    nextChar(compiler);
   }
 }
 
 // Lexes the next token and stores it in [parser.current].
-static void nextToken(Parser* parser) {
-  parser->previous = parser->current;
+static void nextToken(Compiler* compiler) {
+  compiler->parser->previous = compiler->parser->current;
 
-  if (parser->current.type == TOK_EOF)
+  if (compiler->parser->current.type == TOK_EOF)
     return;
 
 #define IF_MATCH_NEXT(next, matched, unmatched)                                \
   do {                                                                         \
-    if (matchChar(parser, next))                                               \
-      makeToken(parser, matched);                                              \
+    if (matchChar(compiler, next))                                             \
+      makeToken(compiler, matched);                                            \
     else                                                                       \
-      makeToken(parser, unmatched);                                            \
+      makeToken(compiler, unmatched);                                          \
   } while (0)
 
-  while (peekChar(parser) != '\0') {
-    parser->tokenStart = parser->currentChar;
-    char c = nextChar(parser);
+  while (peekChar(compiler) != '\0') {
+    compiler->parser->tokenStart = compiler->parser->currentChar;
+    char c = nextChar(compiler);
     switch (c) {
     case ' ':
     case '\r':
     case '\t':
       break;
     case '\n':
-      makeToken(parser, TOK_NEWLINE);
+      makeToken(compiler, TOK_NEWLINE);
       return;
     case '(':
-      makeToken(parser, TOK_LPAREN);
+      makeToken(compiler, TOK_LPAREN);
       return;
     case ')':
-      makeToken(parser, TOK_RPAREN);
+      makeToken(compiler, TOK_RPAREN);
       return;
     case '+':
-      makeToken(parser, TOK_PLUS);
+      makeToken(compiler, TOK_PLUS);
       return;
     case '-':
-      makeToken(parser, TOK_MINUS);
+      makeToken(compiler, TOK_MINUS);
       return;
     case '*':
-      makeToken(parser, TOK_MULTIPLY);
+      makeToken(compiler, TOK_MULTIPLY);
       return;
     case '!':
       IF_MATCH_NEXT('=', TOK_NEQ, TOK_NOT);
@@ -340,28 +372,28 @@ static void nextToken(Parser* parser) {
       IF_MATCH_NEXT('=', TOK_EQ, TOK_ASSIGN);
       return;
     case '/':
-      if (matchChar(parser, '/')) {
-        skipLineComment(parser);
+      if (matchChar(compiler, '/')) {
+        skipLineComment(compiler);
         break;
       }
 
-      makeToken(parser, TOK_DIVIDE);
+      makeToken(compiler, TOK_DIVIDE);
       return;
     case '"':
-      readString(parser);
+      readString(compiler);
       return;
     default:
       if (isName(c)) {
-        readName(parser);
+        readName(compiler);
         return;
       }
       if (isNumber(c)) {
-        readNumber(parser);
+        readNumber(compiler);
         return;
       }
-      lexError(parser, "Invalid character '%c'.", c);
-      parser->current.type = TOK_ERROR;
-      parser->current.length = 0;
+      lexError(compiler, "Invalid character '%c'.", c);
+      compiler->parser->current.type = TOK_ERROR;
+      compiler->parser->current.length = 0;
       return;
     }
   }
@@ -369,212 +401,210 @@ static void nextToken(Parser* parser) {
 #undef IF_MATCH_NEXT
 
   // No more source left.
-  parser->tokenStart = parser->currentChar;
-  makeToken(parser, TOK_EOF);
+  compiler->parser->tokenStart = compiler->parser->currentChar;
+  makeToken(compiler, TOK_EOF);
 }
 
 // Returns true iff the next token has the [expected] Type.
-static bool match(Parser* parser, TokenType expected) {
-  if (peek(parser) != expected)
+static bool match(Compiler* compiler, TokenType expected) {
+  if (peek(compiler) != expected)
     return false;
-  nextToken(parser);
+  nextToken(compiler);
   return true;
 }
 
-static bool matchLine(Parser* parser) {
-  if (!match(parser, TOK_NEWLINE))
+static bool matchLine(Compiler* compiler) {
+  if (!match(compiler, TOK_NEWLINE))
     return false;
-  while (match(parser, TOK_NEWLINE))
+  while (match(compiler, TOK_NEWLINE))
     ;
   return true;
 }
 
-static void ignoreNewlines(Parser* parser) { matchLine(parser); }
+static void ignoreNewlines(Compiler* compiler) { matchLine(compiler); }
 
 // Moves past the next token which must have the [expected] type.
 // If the type is not as expected, this emits an error and attempts to continue
 // parsing at the next token.
-static void consume(Parser* parser, TokenType expected,
+static void consume(Compiler* compiler, TokenType expected,
                     const char* errorMessage) {
-  nextToken(parser);
-  if (parser->previous.type != expected) {
-    error(parser, errorMessage);
-    if (parser->current.type == expected) {
-      nextToken(parser);
+  nextToken(compiler);
+  if (compiler->parser->previous.type != expected) {
+    error(compiler, errorMessage);
+    if (compiler->parser->current.type == expected) {
+      nextToken(compiler);
     }
   }
 }
 
 // AST ------------------------------------------------------------------------
 
-static void parse(Parser* parser, int precedence) {
-  nextToken(parser);
-  Token token = parser->previous;
+static void parse(Compiler* compiler, int precedence) {
+  nextToken(compiler);
+  Token token = compiler->parser->previous;
 
   GrammarFn prefix = rules[token.type].prefix;
   if (prefix == NULL) {
-    error(parser, "Parse error %d", token.type);
+    error(compiler, "Parse error %d", token.type);
     return;
   }
 
   bool canAssign = false;
-  prefix(parser, canAssign);
+  prefix(compiler, canAssign);
 
-  while (precedence < rules[parser->current.type].precedence) {
-    nextToken(parser);
-    GrammarFn infix = rules[parser->previous.type].infix;
-    infix(parser, canAssign);
+  while (precedence < rules[compiler->parser->current.type].precedence) {
+    nextToken(compiler);
+    GrammarFn infix = rules[compiler->parser->previous.type].infix;
+    infix(compiler, canAssign);
   }
 }
 
-static void expression(Parser* parser) { parse(parser, PREC_LOWEST); }
+static void expression(Compiler* compiler) { parse(compiler, PREC_LOWEST); }
 
-static void assignStmt(Parser* parser) {
-  consume(parser, TOK_IDENT, "Expected an identifier.");
-  Value name =
-      OBJ_VAL(copyString(parser->previous.start, parser->previous.length));
+static void assignStmt(Compiler* compiler) {
+  consume(compiler, TOK_IDENT, "Expected an identifier.");
+  Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
+                                  compiler->parser->previous.length));
 
-  consume(parser, TOK_ASSIGN, "Expected '='");
-  expression(parser);
-  defineGlobal(parser, name);
+  consume(compiler, TOK_ASSIGN, "Expected '='");
+  expression(compiler);
+  defineGlobal(compiler, name);
 }
 
-static void debugStmt(Parser* parser) {
-  expression(parser);
-  emitOp(parser, OP_DEBUG);
+static void debugStmt(Compiler* compiler) {
+  expression(compiler);
+  emitOp(compiler, OP_DEBUG);
 }
 
-static void statement(Parser* parser) {
-  if (match(parser, TOK_DEBUG)) {
-    debugStmt(parser);
+static void enterScope(Compiler* compiler) { return; }
+static void exitScope(Compiler* compiler) { return; }
+
+static void block(Compiler* compiler) {
+  enterScope(compiler);
+  exitScope(compiler);
+}
+
+static void statement(Compiler* compiler) {
+  if (match(compiler, TOK_DEBUG)) {
+    debugStmt(compiler);
+  } else if (match(compiler, TOK_LBRACK)) {
+    block(compiler);
   } else {
-    expression(parser);
+    expression(compiler);
   }
 }
 
-static void declaration(Parser* parser) {
-  if (match(parser, TOK_LET)) {
-    assignStmt(parser);
+static void declaration(Compiler* compiler) {
+  if (match(compiler, TOK_LET)) {
+    assignStmt(compiler);
   } else {
-    statement(parser);
+    statement(compiler);
   }
 }
 
 // A parenthesized expression.
-static void grouping(Parser* parser, bool canAssign) {
-  expression(parser);
-  consume(parser, TOK_RPAREN, "Expected ')' after expression.");
+static void grouping(Compiler* compiler, bool canAssign) {
+  expression(compiler);
+  consume(compiler, TOK_RPAREN, "Expected ')' after expression.");
 }
 
-static void string(Parser* parser, bool canAssign) {
+static void string(Compiler* compiler, bool canAssign) {
   // +1 and -2 to omit the leading and traling '"'.
-  emitConstant(parser, OBJ_VAL(copyString(parser->previous.start + 1,
-                                          parser->previous.length - 2)));
+  emitConstant(compiler,
+               OBJ_VAL(copyString(compiler->parser->previous.start + 1,
+                                  compiler->parser->previous.length - 2)));
 }
 
-static void identifier(Parser* parser, bool canAssign) {
-  Value name =
-      OBJ_VAL(copyString(parser->previous.start, parser->previous.length));
-  getGlobal(parser, name);
+static void identifier(Compiler* compiler, bool canAssign) {
+  Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
+                                  compiler->parser->previous.length));
+  getGlobal(compiler, name);
 }
 
-static void literal(Parser* parser, bool canAssign) {
-  switch (parser->previous.type) {
+static void literal(Compiler* compiler, bool canAssign) {
+  switch (compiler->parser->previous.type) {
   case TOK_TRUE:
-    emitBool(parser, OBA_BOOL(true));
+    emitBool(compiler, OBA_BOOL(true));
     break;
   case TOK_FALSE:
-    emitBool(parser, OBA_BOOL(false));
+    emitBool(compiler, OBA_BOOL(false));
     break;
   case TOK_NUMBER:
-    emitConstant(parser, parser->previous.value);
+    emitConstant(compiler, compiler->parser->previous.value);
     break;
   default:
-    error(parser, "Expected a boolean or number value.");
+    error(compiler, "Expected a boolean or number value.");
   }
 }
 
-static void unaryOp(Parser* parser, bool canAssign) {
-  GrammarRule* rule = getRule(parser->previous.type);
-  TokenType opType = parser->previous.type;
+static void unaryOp(Compiler* compiler, bool canAssign) {
+  GrammarRule* rule = getRule(compiler->parser->previous.type);
+  TokenType opType = compiler->parser->previous.type;
 
-  ignoreNewlines(parser);
+  ignoreNewlines(compiler);
 
   // Compile the right hand side (right-associative).
-  parse(parser, rule->precedence);
+  parse(compiler, rule->precedence);
 
   switch (opType) {
   case TOK_NOT:
-    emitOp(parser, OP_NOT);
+    emitOp(compiler, OP_NOT);
     break;
   default:
-    error(parser, "Invalid operator %s", rule->name);
+    error(compiler, "Invalid operator %s", rule->name);
   }
 }
 
-static void infixOp(Parser* parser, bool canAssign) {
-  GrammarRule* rule = getRule(parser->previous.type);
-  TokenType opType = parser->previous.type;
+static void infixOp(Compiler* compiler, bool canAssign) {
+  GrammarRule* rule = getRule(compiler->parser->previous.type);
+  TokenType opType = compiler->parser->previous.type;
 
-  ignoreNewlines(parser);
+  ignoreNewlines(compiler);
 
   // Compile the right hand side (right-associative).
-  parse(parser, rule->precedence);
+  parse(compiler, rule->precedence);
 
   switch (opType) {
   case TOK_PLUS:
-    emitOp(parser, OP_ADD);
+    emitOp(compiler, OP_ADD);
     return;
   case TOK_MINUS:
-    emitOp(parser, OP_MINUS);
+    emitOp(compiler, OP_MINUS);
     return;
   case TOK_MULTIPLY:
-    emitOp(parser, OP_MULTIPLY);
+    emitOp(compiler, OP_MULTIPLY);
     return;
   case TOK_DIVIDE:
-    emitOp(parser, OP_DIVIDE);
+    emitOp(compiler, OP_DIVIDE);
     return;
   case TOK_GT:
-    emitOp(parser, OP_GT);
+    emitOp(compiler, OP_GT);
     return;
   case TOK_LT:
-    emitOp(parser, OP_LT);
+    emitOp(compiler, OP_LT);
     return;
   case TOK_GTE:
-    emitOp(parser, OP_GTE);
+    emitOp(compiler, OP_GTE);
     return;
   case TOK_LTE:
-    emitOp(parser, OP_LTE);
+    emitOp(compiler, OP_LTE);
     return;
   case TOK_EQ:
-    emitOp(parser, OP_EQ);
+    emitOp(compiler, OP_EQ);
     return;
   case TOK_NEQ:
-    emitOp(parser, OP_NEQ);
+    emitOp(compiler, OP_NEQ);
     return;
   case TOK_ASSIGN:
-    emitOp(parser, OP_ASSIGN);
+    emitOp(compiler, OP_ASSIGN);
     return;
   default:
-    error(parser, "Invalid operator %s", rule->name);
+    error(compiler, "Invalid operator %s", rule->name);
     return;
   }
 }
 
 // Compiling ------------------------------------------------------------------
-
-struct sCompiler {
-  Parser* parser;
-};
-
-void initCompiler(Compiler* compiler, Parser* parser) {
-  compiler->parser = parser;
-  compiler->parser->vm->compiler = compiler;
-
-  compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
-  initChunk(compiler->parser->vm->chunk);
-  compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
-}
 
 bool obaCompile(ObaVM* vm, const char* source) {
   // Skip the UTF-8 BOM if there is one.
@@ -593,21 +623,21 @@ bool obaCompile(ObaVM* vm, const char* source) {
   parser.current.line = 0;
   parser.hasError = false;
 
-  nextToken(&parser);
-
   Compiler compiler;
   initCompiler(&compiler, &parser);
-  ignoreNewlines(&parser);
 
-  while (!match(compiler.parser, TOK_EOF)) {
-    declaration(compiler.parser);
+  nextToken(&compiler);
+  ignoreNewlines(&compiler);
+
+  while (!match(&compiler, TOK_EOF)) {
+    declaration(&compiler);
     // If no newline, the file must end on this line.
-    if (!matchLine(compiler.parser)) {
-      consume(compiler.parser, TOK_EOF, "Expected end of file.");
+    if (!matchLine(&compiler)) {
+      consume(&compiler, TOK_EOF, "Expected end of file.");
       break;
     }
   }
 
-  emitOp(&parser, OP_EXIT);
+  emitOp(&compiler, OP_EXIT);
   return parser.hasError;
 }

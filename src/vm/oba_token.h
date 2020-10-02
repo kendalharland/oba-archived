@@ -18,6 +18,8 @@ typedef enum {
   TOK_NEQ,
   TOK_LPAREN,
   TOK_RPAREN,
+  TOK_LBRACK,
+  TOK_RBRACK,
   TOK_PLUS,
   TOK_MINUS,
   TOK_MULTIPLY,
