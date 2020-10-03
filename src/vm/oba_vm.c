@@ -279,11 +279,20 @@ do {                                                                           \
       push(vm, value);
       break;
     }
-    case OP_GET_LOCAL: {
-      // Locals live on the top of the stack.
-      push(vm, peek(vm, 1));
+    case OP_SET_LOCAL: {
+      uint8_t slot = READ_BYTE();
+      vm->stack[slot] = peek(vm, 1);
       break;
     }
+    case OP_GET_LOCAL: {
+      // Locals live on the top of the stack.
+      uint8_t slot = READ_BYTE();
+      push(vm, vm->stack[slot]);
+      break;
+    }
+    case OP_POP:
+      pop(vm);
+      break;
     case OP_DEBUG: {
       Value value = pop(vm);
       printf("DEBUG: ");

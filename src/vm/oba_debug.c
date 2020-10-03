@@ -16,6 +16,12 @@ static int simpleInstruction(const char* name, Chunk* chunk, int offset) {
   return offset + 1;
 }
 
+static int byteInstruction(const char* name, Chunk* chunk, int offset) {
+  uint8_t operand = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, operand);
+  return offset + 2;
+}
+
 int disassemble(Chunk* chunk, const char* name) {
   printf("== %s ==\n", name);
   for (int offset = 0; offset < chunk->count;) {
@@ -62,8 +68,12 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL:
     return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+  case OP_SET_LOCAL:
+    return byteInstruction("OP_SET_LOCAL", chunk, offset);
   case OP_GET_LOCAL:
-    return constantInstruction("OP_GET_LOCAL", chunk, offset);
+    return byteInstruction("OP_GET_LOCAL", chunk, offset);
+  case OP_POP:
+    return simpleInstruction("OP_POP", chunk, offset);
   case OP_DEBUG:
     return simpleInstruction("OP_DEBUG", chunk, offset);
   case OP_EXIT:

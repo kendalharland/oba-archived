@@ -23,10 +23,12 @@ typedef enum {
   OP_EQ,
   OP_NEQ,
   OP_ASSIGN,
+  OP_POP,
   OP_DEBUG,
   OP_DEFINE_GLOBAL,
   OP_GET_GLOBAL,
   OP_GET_LOCAL,
+  OP_SET_LOCAL,
 
   OP_EXIT,
 } OpCode;

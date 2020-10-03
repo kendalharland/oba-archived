@@ -29,13 +29,13 @@ typedef struct {
 
 typedef struct {
   Token token;
-  int scopeDepth;
+  int depth;
 } Local;
 
 struct sCompiler {
   Local locals[MAX_LOCALS];
   int localCount;
-  int currentScope;
+  int currentDepth;
   Parser* parser;
 };
 
@@ -43,13 +43,43 @@ void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser = parser;
   compiler->parser->vm->compiler = compiler;
   compiler->localCount = 0;
-  compiler->currentScope = 0;
+  compiler->currentDepth = 0;
 
   compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
   initChunk(compiler->parser->vm->chunk);
   compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
 }
 
+static void printError(Compiler* compiler, int line, const char* label,
+                       const char* format, va_list args) {
+  char message[1024];
+  int length = sprintf(message, "%s: ", label);
+  length += vsprintf(message + length, format, args);
+  // TODO(kendal): Ensure length < 1024
+  printf("%s\n", message);
+}
+
+static void lexError(Compiler* compiler, const char* format, ...) {
+  compiler->parser->hasError = true;
+
+  va_list args;
+  va_start(args, format);
+  printError(compiler, compiler->parser->currentLine, "Error", format, args);
+  va_end(args);
+}
+
+static void error(Compiler* compiler, const char* format, ...) {
+  compiler->parser->hasError = true;
+
+  // The lexer already reported this error.
+  if (compiler->parser->previous.type == TOK_ERROR)
+    return;
+
+  va_list args;
+  va_start(args, format);
+  printError(compiler, compiler->parser->currentLine, "Error", format, args);
+  va_end(args);
+}
 // Forward declarations because the grammar is recursive.
 static void ignoreNewlines(Compiler*);
 static void grouping(Compiler*, bool);
@@ -102,29 +132,66 @@ static void defineGlobal(Compiler* compiler, int global) {
   emitByte(compiler, global);
 }
 
-static void addLocal(Compiler* compiler) {
-  Local local = compiler->locals[compiler->localCount++];
-  local.scopeDepth = compiler->currentScope;
-  local.token = compiler->parser->previous;
+// Declares a new local in an uninitialized state.
+// Any attempt to use the local before it is initialized is an error.
+static void addLocal(Compiler* compiler, Token name) {
+  Local* local = &compiler->locals[compiler->localCount++];
+  local->token = name;
+  local->depth = -1;
 }
 
-static int declareVariable(Compiler* compiler, Value name) {
-  if (compiler->currentScope > 0) {
-    addLocal(compiler);
-    // Locals live on the stack, so we didn't add a constant. Return a dummy
-    // value.
-    return 0;
+static void defineLocal(Compiler* compiler) {
+  // We cannot have declared any new locals before defining this one, because
+  // assignments do not nest inside expressions. The local we're defining is
+  // the most recent one.
+  Local* local = &compiler->locals[compiler->localCount - 1];
+  local->depth = compiler->currentDepth;
+
+  emitOp(compiler, OP_SET_LOCAL);
+  // The local's value is already at the top of the stack.
+  emitByte(compiler, compiler->localCount - 1);
+}
+
+static bool identifiersMatch(Token a, Token b) {
+  return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
+}
+
+static int declareVariable(Compiler* compiler, Token name) {
+  if (compiler->currentDepth == 0) {
+    return declareGlobal(compiler,
+                         OBJ_VAL(copyString(name.start, name.length)));
   }
-  return addConstant(compiler, name);
+
+  int slot = compiler->localCount;
+
+  // Ensure the variable is is not already declared in this scope.
+  for (int slot = compiler->localCount - 1; slot >= 0; slot--) {
+    Local local = compiler->locals[slot];
+    if (local.depth < compiler->currentDepth) {
+      break;
+    }
+    if (identifiersMatch(name, local.token)) {
+      error(compiler, "Variable with this name already declared in this scope");
+      return 0;
+    }
+  }
+
+  addLocal(compiler, name);
+  return 0;
 }
 
 static void defineVariable(Compiler* compiler, int variable) {
   // Local variables live on the stack, so we don't need to define anything.
-  if (compiler->currentScope > 0)
+  if (compiler->currentDepth > 0) {
+    defineLocal(compiler);
     return;
+  }
 
   defineGlobal(compiler, variable);
 }
+
+// TODO(kendal): Handle the case where an existing variable is being re-set to
+// some value, rather than declared or defined for the first time.
 
 static void getGlobal(Compiler* compiler, Value name) {
   int global = addConstant(compiler, name);
@@ -132,23 +199,38 @@ static void getGlobal(Compiler* compiler, Value name) {
   emitByte(compiler, global);
 }
 
-static void getLocal(Compiler* compiler, Value name) {
-  int global = addConstant(compiler, name);
+static void getLocal(Compiler* compiler, int slot) {
+  Local local = compiler->locals[slot];
+  if (local.depth < 0) {
+    error(compiler, "Cannot read local variable in its own initializer");
+    return;
+  }
   emitOp(compiler, OP_GET_LOCAL);
-  emitByte(compiler, global);
+  emitByte(compiler, (uint8_t)slot);
 }
 
 // Finds a local variabled named [name] in the current scope.
 // Returns a negative number if it is not found.
-static int lookupLocal(Compiler* compiler, Value name) { return -1; }
+static int lookupLocal(Compiler* compiler, Token name) {
+  // Find the first local whose depth is gte the current scope and whose
+  // token matches `name`.
+  for (int i = compiler->localCount - 1; i >= 0; i--) {
+    Local local = compiler->locals[i];
+    if (local.token.length == name.length &&
+        identifiersMatch(local.token, name)) {
+      return i;
+    }
+  }
+  return -1;
+}
 
-static void getVariable(Compiler* compiler, Value name) {
-  uint8_t getOp;
+static void getVariable(Compiler* compiler, Value value) {
+  Token name = compiler->parser->previous;
   int local = lookupLocal(compiler, name);
-  if (local < 0) {
-    getGlobal(compiler, name);
+  if (local >= 0) {
+    getLocal(compiler, local);
   } else {
-    getLocal(compiler, name);
+    getGlobal(compiler, value);
   }
 }
 
@@ -244,37 +326,6 @@ static Keyword keywords[] = {
 // clang-format on
 
 // Lexing ---------------------------------------------------------------------
-
-static void printError(Compiler* compiler, int line, const char* label,
-                       const char* format, va_list args) {
-  char message[1024];
-  int length = sprintf(message, "%s: ", label);
-  length += vsprintf(message + length, format, args);
-  // TODO(kendal): Ensure length < 1024
-  printf("%s\n", message);
-}
-
-static void lexError(Compiler* compiler, const char* format, ...) {
-  compiler->parser->hasError = true;
-
-  va_list args;
-  va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Error", format, args);
-  va_end(args);
-}
-
-static void error(Compiler* compiler, const char* format, ...) {
-  compiler->parser->hasError = true;
-
-  // The lexer already reported this error.
-  if (compiler->parser->previous.type == TOK_ERROR)
-    return;
-
-  va_list args;
-  va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Error", format, args);
-  va_end(args);
-}
 
 // Parsing --------------------------------------------------------------------
 
@@ -520,15 +571,14 @@ static void assignStmt(Compiler* compiler) {
   consume(compiler, TOK_IDENT, "Expected an identifier.");
   // Get the name, but don't declare it yet; A variable should not be in scope
   // in its own initializer.
-  Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
-                                  compiler->parser->previous.length));
+  Token name = compiler->parser->previous;
+  int variable = declareVariable(compiler, name);
 
   // Compile the initializer.
   consume(compiler, TOK_ASSIGN, "Expected '='");
   expression(compiler);
 
   // Now define the variable.
-  int variable = declareVariable(compiler, name);
   defineVariable(compiler, variable);
 }
 
@@ -537,8 +587,20 @@ static void debugStmt(Compiler* compiler) {
   emitOp(compiler, OP_DEBUG);
 }
 
-static void enterScope(Compiler* compiler) { compiler->currentScope++; }
-static void exitScope(Compiler* compiler) { compiler->currentScope--; }
+static void enterScope(Compiler* compiler) { compiler->currentDepth++; }
+
+static void exitScope(Compiler* compiler) {
+  compiler->currentDepth--;
+  for (int i = compiler->localCount - 1; i >= 0; i--) {
+    Local local = compiler->locals[i];
+    if (local.depth > compiler->currentDepth) {
+      compiler->localCount--;
+      emitOp(compiler, OP_POP);
+    } else {
+      break;
+    }
+  }
+}
 
 static void block(Compiler* compiler) {
   enterScope(compiler);

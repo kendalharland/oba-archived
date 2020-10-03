@@ -1,0 +1,8 @@
+{
+  let a = "hi"
+  {
+    // Error a is not defined in its initializer. 
+    let a = a
+    debug a
+  }
+}
