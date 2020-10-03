@@ -125,6 +125,25 @@ static void emitBool(Compiler* compiler, Value value) {
   AS_BOOL(value) ? emitOp(compiler, OP_TRUE) : emitOp(compiler, OP_FALSE);
 }
 
+static void patchJump(Compiler* compiler, int offset) {
+  Chunk* chunk = compiler->parser->vm->chunk;
+  // -2 to account for the placerholder bytes.
+  int jump = chunk->count - offset - 2;
+  if (jump > UINT16_MAX) {
+    error(compiler, "Too much code to jump over");
+    return;
+  }
+  chunk->code[offset] = (jump >> 8) & 0xff;
+  chunk->code[offset + 1] = jump & 0xff;
+}
+
+static int emitJump(Compiler* compiler, OpCode op) {
+  emitOp(compiler, op);
+  emitByte(compiler, 0xff);
+  emitByte(compiler, 0xff);
+  return compiler->parser->vm->chunk->count - 2;
+}
+
 static int declareGlobal(Compiler* compiler, Value name) {
   return addConstant(compiler, name);
 }
@@ -640,25 +659,6 @@ static void blockStmt(Compiler* compiler) {
   ignoreNewlines(compiler);
   consume(compiler, TOK_RBRACK, "Expected '}' at the end of block");
   exitScope(compiler);
-}
-
-static void patchJump(Compiler* compiler, int offset) {
-  Chunk* chunk = compiler->parser->vm->chunk;
-  // -2 to account for the placerholder bytes.
-  int jump = chunk->count - offset - 2;
-  if (jump > UINT16_MAX) {
-    error(compiler, "Too much code to jump over");
-    return;
-  }
-  chunk->code[offset] = (jump >> 8) & 0xff;
-  chunk->code[offset + 1] = jump & 0xff;
-}
-
-static int emitJump(Compiler* compiler, OpCode op) {
-  emitOp(compiler, op);
-  emitByte(compiler, 0xff);
-  emitByte(compiler, 0xff);
-  return compiler->parser->vm->chunk->count - 2;
 }
 
 static void ifStmt(Compiler* compiler) {
