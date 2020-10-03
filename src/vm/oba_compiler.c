@@ -132,6 +132,12 @@ static void defineGlobal(Compiler* compiler, int global) {
   emitByte(compiler, global);
 }
 
+static void setLocal(Compiler* compiler, int slot) {
+  // The local's value is already at the top of the stack.
+  emitOp(compiler, OP_SET_LOCAL);
+  emitByte(compiler, slot);
+}
+
 // Declares a new local in an uninitialized state.
 // Any attempt to use the local before it is initialized is an error.
 static void addLocal(Compiler* compiler, Token name) {
@@ -147,9 +153,7 @@ static void defineLocal(Compiler* compiler) {
   Local* local = &compiler->locals[compiler->localCount - 1];
   local->depth = compiler->currentDepth;
 
-  emitOp(compiler, OP_SET_LOCAL);
-  // The local's value is already at the top of the stack.
-  emitByte(compiler, compiler->localCount - 1);
+  setLocal(compiler, compiler->localCount - 1);
 }
 
 static bool identifiersMatch(Token a, Token b) {
@@ -224,14 +228,28 @@ static int lookupLocal(Compiler* compiler, Token name) {
   return -1;
 }
 
-static void getVariable(Compiler* compiler, Value value) {
+static void getVariable(Compiler* compiler) {
   Token name = compiler->parser->previous;
   int local = lookupLocal(compiler, name);
   if (local >= 0) {
     getLocal(compiler, local);
   } else {
+    Value value = OBJ_VAL(copyString(name.start, name.length));
     getGlobal(compiler, value);
   }
+}
+
+static void setVariable(Compiler* compiler, Token name) {
+  int local = lookupLocal(compiler, name);
+  if (local >= 0) {
+    setLocal(compiler, local);
+    // The local already has a slot, so we don't need to keep the new value on
+    // the stack.
+    emitOp(compiler, OP_POP);
+    return;
+  }
+  // Globals are constant.
+  error(compiler, "Cannot reassign global variable");
 }
 
 // Grammar --------------------------------------------------------------------
@@ -241,6 +259,7 @@ static void getVariable(Compiler* compiler, Value value) {
 typedef enum {
   PREC_NONE,
   PREC_LOWEST,
+  PREC_ASSIGN,  // =
   PREC_COND,    // < > <= >= != ==
   PREC_SUM,     // + -
   PREC_PRODUCT, // * /
@@ -277,7 +296,7 @@ typedef struct {
 
 GrammarRule rules[] =  {
   /* TOK_NOT       */ PREFIX(unaryOp),
-  /* TOK_ASSIGN    */ INFIX_OPERATOR(PREC_COND, "="),
+  /* TOK_ASSIGN    */ INFIX_OPERATOR(PREC_ASSIGN, "="),
   /* TOK_GT        */ INFIX_OPERATOR(PREC_COND, ">"),
   /* TOK_LT        */ INFIX_OPERATOR(PREC_COND, "<"),
   /* TOK_GTE       */ INFIX_OPERATOR(PREC_COND, ">="),
@@ -555,7 +574,7 @@ static void parse(Compiler* compiler, int precedence) {
     return;
   }
 
-  bool canAssign = false;
+  bool canAssign = precedence < PREC_COND;
   prefix(compiler, canAssign);
 
   while (precedence < rules[compiler->parser->current.type].precedence) {
@@ -648,10 +667,27 @@ static void string(Compiler* compiler, bool canAssign) {
                                   compiler->parser->previous.length - 2)));
 }
 
+static void assignment(Compiler* compiler, bool canAssign) {
+  if (!canAssign) {
+    error(compiler, "Cannot assign variable in this scope");
+    return;
+  }
+
+  Token name = compiler->parser->previous;
+
+  // Compile the initializer.
+  consume(compiler, TOK_ASSIGN, "Expected '='");
+  expression(compiler);
+
+  setVariable(compiler, name);
+}
+
 static void identifier(Compiler* compiler, bool canAssign) {
-  Value name = OBJ_VAL(copyString(compiler->parser->previous.start,
-                                  compiler->parser->previous.length));
-  getVariable(compiler, name);
+  if (peek(compiler) == TOK_ASSIGN) {
+    assignment(compiler, canAssign);
+    return;
+  }
+  getVariable(compiler);
 }
 
 static void literal(Compiler* compiler, bool canAssign) {

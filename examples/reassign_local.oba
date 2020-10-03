@@ -1,0 +1,6 @@
+{ 
+  let x = 10
+  debug x
+  x = 4
+  debug x
+}
