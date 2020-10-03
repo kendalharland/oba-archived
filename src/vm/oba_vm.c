@@ -287,6 +287,10 @@ do {                                                                           \
         vm->ip += jump;
       break;
     }
+    case OP_LOOP: {
+      vm->ip = vm->chunk->code + READ_SHORT();
+      break;
+    }
     case OP_DEFINE_GLOBAL: {
       ObjString* name = READ_STRING();
       tableSet(vm->globals, name, peek(vm, 1));

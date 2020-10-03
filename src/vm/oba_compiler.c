@@ -127,12 +127,14 @@ static void emitBool(Compiler* compiler, Value value) {
 
 static void patchJump(Compiler* compiler, int offset) {
   Chunk* chunk = compiler->parser->vm->chunk;
-  // -2 to account for the placerholder bytes.
+
+  // -2 to account for the placeholder bytes.
   int jump = chunk->count - offset - 2;
   if (jump > UINT16_MAX) {
     error(compiler, "Too much code to jump over");
     return;
   }
+
   chunk->code[offset] = (jump >> 8) & 0xff;
   chunk->code[offset + 1] = jump & 0xff;
 }
@@ -142,6 +144,20 @@ static int emitJump(Compiler* compiler, OpCode op) {
   emitByte(compiler, 0xff);
   emitByte(compiler, 0xff);
   return compiler->parser->vm->chunk->count - 2;
+}
+
+static void emitLoop(Compiler* compiler, int start) {
+  emitOp(compiler, OP_LOOP);
+
+  int jump = compiler->parser->vm->chunk->count - start - 2;
+  if (jump > UINT16_MAX) {
+    error(compiler, "Loop body too large");
+    return;
+  }
+
+  // Store the exact index of the loop start instruction as the operand.
+  emitByte(compiler, (start >> 8) & 0xff);
+  emitByte(compiler, start & 0xff);
 }
 
 static int declareGlobal(Compiler* compiler, Value name) {
@@ -342,6 +358,7 @@ GrammarRule rules[] =  {
   /* TOK_FALSE     */ PREFIX(literal),
   /* TOK_IF        */ UNUSED,  
   /* TOK_ELSE      */ UNUSED,  
+  /* TOK_WHILE     */ UNUSED,  
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -364,6 +381,7 @@ static Keyword keywords[] = {
     {"true",  4, TOK_TRUE},
     {"if",    2, TOK_IF},
     {"else",  4, TOK_ELSE},
+    {"while", 5, TOK_WHILE},
     {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
@@ -686,6 +704,20 @@ static void ifStmt(Compiler* compiler) {
   emitOp(compiler, OP_POP);
 }
 
+static void whileStmt(Compiler* compiler) {
+  // Compile the conditional.
+  expression(compiler);
+
+  int loopStart = compiler->parser->vm->chunk->count;
+  int offset = emitJump(compiler, OP_JUMP_IF_FALSE);
+  statement(compiler);
+  emitLoop(compiler, loopStart);
+  patchJump(compiler, offset);
+
+  // Don't forget to pop the conditional
+  emitOp(compiler, OP_POP);
+}
+
 static void statement(Compiler* compiler) {
   if (match(compiler, TOK_DEBUG)) {
     debugStmt(compiler);
@@ -693,6 +725,8 @@ static void statement(Compiler* compiler) {
     blockStmt(compiler);
   } else if (match(compiler, TOK_IF)) {
     ifStmt(compiler);
+  } else if (match(compiler, TOK_WHILE)) {
+    whileStmt(compiler);
   } else {
     expression(compiler);
   }
