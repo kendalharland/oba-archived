@@ -627,7 +627,7 @@ static void exitScope(Compiler* compiler) {
   }
 }
 
-static void block(Compiler* compiler) {
+static void blockStmt(Compiler* compiler) {
   enterScope(compiler);
 
   ignoreNewlines(compiler);
@@ -690,7 +690,7 @@ static void statement(Compiler* compiler) {
   if (match(compiler, TOK_DEBUG)) {
     debugStmt(compiler);
   } else if (match(compiler, TOK_LBRACK)) {
-    block(compiler);
+    blockStmt(compiler);
   } else if (match(compiler, TOK_IF)) {
     ifStmt(compiler);
   } else {
