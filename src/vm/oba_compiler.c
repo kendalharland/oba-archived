@@ -705,17 +705,19 @@ static void ifStmt(Compiler* compiler) {
 }
 
 static void whileStmt(Compiler* compiler) {
+  int loopStart = compiler->parser->vm->chunk->count;
+
   // Compile the conditional.
   expression(compiler);
 
-  int loopStart = compiler->parser->vm->chunk->count;
   int offset = emitJump(compiler, OP_JUMP_IF_FALSE);
   statement(compiler);
+
+  // Pop the conditional before looping, since the value is recompiled each time
+  // based on the new stack contents.
+  emitOp(compiler, OP_POP);
   emitLoop(compiler, loopStart);
   patchJump(compiler, offset);
-
-  // Don't forget to pop the conditional
-  emitOp(compiler, OP_POP);
 }
 
 static void statement(Compiler* compiler) {
