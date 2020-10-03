@@ -1,0 +1,12 @@
+// Outputs:
+// 1
+// 2
+// 3
+
+{
+  let x = 1
+  while match x | 1 = true | 2 = true | 3 = true | 4 = false {
+    debug x
+    x = x + 1
+  }
+}
