@@ -1,0 +1,12 @@
+// Loop match example
+{
+  let x = 0
+  while x < 3 {
+    x = x + 1
+    debug match x 
+     | 1 = "one"
+     | 2 = "two"
+     | 3 = "three"
+  }
+}
+

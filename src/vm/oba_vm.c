@@ -287,6 +287,16 @@ do {                                                                           \
         vm->ip += jump;
       break;
     }
+    case OP_JUMP_IF_NOT_MATCH: {
+      // TODO(kjharland): Support variable matches.
+      int jump = READ_SHORT();
+      Value a = peek(vm, 2);
+      Value b = pop(vm);
+      if (!valuesEqual(b, a)) {
+        vm->ip += jump;
+      }
+      break;
+    }
     case OP_LOOP: {
       vm->ip = vm->chunk->code + READ_SHORT();
       break;
@@ -316,6 +326,13 @@ do {                                                                           \
       // Locals live on the top of the stack.
       uint8_t slot = READ_BYTE();
       push(vm, vm->stack[slot]);
+      break;
+    }
+    case OP_SWAP_STACK_TOP: {
+      Value top = pop(vm);
+      Value next = pop(vm);
+      push(vm, top);
+      push(vm, next);
       break;
     }
     case OP_POP:

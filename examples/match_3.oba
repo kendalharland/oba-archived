@@ -1,0 +1,10 @@
+// String match example.
+{
+  let animal = "bird"
+  let kind = match animal
+    | "bird" = "parrot"
+    | "dog"  = "beagle"
+  
+  debug "the " + animal + " is a " + kind
+}
+

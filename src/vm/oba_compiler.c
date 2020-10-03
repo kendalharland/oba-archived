@@ -90,6 +90,7 @@ static void infixOp(Compiler*, bool);
 static void identifier(Compiler*, bool);
 static void literal(Compiler*, bool);
 static void string(Compiler*, bool);
+static void matchExpr(Compiler*, bool);
 
 static void declaration(Compiler*);
 
@@ -286,6 +287,8 @@ static void setVariable(Compiler* compiler, Token name) {
     return;
   }
   // Globals are constant.
+  // TODO(kendal): Lookup the global so that we can print whether it's defined
+  // at all.
   error(compiler, "Cannot reassign global variable");
 }
 
@@ -340,6 +343,7 @@ GrammarRule rules[] =  {
   /* TOK_LTE       */ INFIX_OPERATOR(PREC_COND, "<="),
   /* TOK_EQ        */ INFIX_OPERATOR(PREC_COND, "=="),
   /* TOK_NEQ       */ INFIX_OPERATOR(PREC_COND, "!="),
+  /* TOK_GUARD     */ UNUSED,
   /* TOK_LPAREN    */ PREFIX(grouping),  
   /* TOK_RPAREN    */ UNUSED, 
   /* TOK_LBRACK    */ UNUSED,  
@@ -359,6 +363,7 @@ GrammarRule rules[] =  {
   /* TOK_IF        */ UNUSED,  
   /* TOK_ELSE      */ UNUSED,  
   /* TOK_WHILE     */ UNUSED,  
+  /* TOK_MATCH     */ PREFIX(matchExpr),
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -382,6 +387,7 @@ static Keyword keywords[] = {
     {"if",    2, TOK_IF},
     {"else",  4, TOK_ELSE},
     {"while", 5, TOK_WHILE},
+    {"match", 5, TOK_MATCH},
     {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
@@ -505,6 +511,9 @@ static void nextToken(Compiler* compiler) {
       break;
     case '\n':
       makeToken(compiler, TOK_NEWLINE);
+      return;
+    case '|':
+      makeToken(compiler, TOK_GUARD);
       return;
     case '(':
       makeToken(compiler, TOK_LPAREN);
@@ -776,6 +785,67 @@ static void identifier(Compiler* compiler, bool canAssign) {
     return;
   }
   getVariable(compiler);
+}
+
+// TODO(kjharland): Support variable patterns.
+static void pattern(Compiler* compiler) {
+  nextToken(compiler);
+
+  Token token = compiler->parser->previous;
+  switch (token.type) {
+  case TOK_TRUE:
+    emitConstant(compiler, OBA_BOOL(true));
+    break;
+  case TOK_FALSE:
+    emitConstant(compiler, OBA_BOOL(false));
+    break;
+  case TOK_NUMBER:
+    emitConstant(compiler, token.value);
+    break;
+  case TOK_STRING:
+    emitConstant(compiler,
+                 OBJ_VAL(copyString(token.start + 1, token.length - 2)));
+    break;
+  default:
+    error(compiler, "Expected a constant value.");
+  }
+}
+
+static void matchExprCase(Compiler* compiler) {
+  pattern(compiler);
+
+  int offset = emitJump(compiler, OP_JUMP_IF_NOT_MATCH);
+  if (!match(compiler, TOK_ASSIGN)) {
+    error(compiler, "Expected '=' after pattern");
+    return;
+  }
+
+  // Compile the body, which only gets evaluated if the pattern above matched.
+  expression(compiler);
+  // If the expression was evaluated, its value is sitting on top of the stack
+  // above the original match value, and should be the return value of the
+  // entire expression. Swap them so that this expressions value is returned.
+  emitOp(compiler, OP_SWAP_STACK_TOP);
+  patchJump(compiler, offset);
+}
+
+static void matchExpr(Compiler* compiler, bool canAssign) {
+  // Compile the expression to push the value to match onto the stack.
+  expression(compiler);
+  ignoreNewlines(compiler);
+
+  if (!match(compiler, TOK_GUARD)) {
+    error(compiler, "Expected guard after match expression");
+    return;
+  }
+
+  do {
+    matchExprCase(compiler);
+    ignoreNewlines(compiler);
+  } while (match(compiler, TOK_GUARD));
+
+  // Clean up the stack.
+  emitOp(compiler, OP_POP);
 }
 
 static void literal(Compiler* compiler, bool canAssign) {

@@ -16,6 +16,7 @@ typedef enum {
   TOK_LTE,
   TOK_EQ,
   TOK_NEQ,
+  TOK_GUARD,
   TOK_LPAREN,
   TOK_RPAREN,
   TOK_LBRACK,
@@ -39,6 +40,7 @@ typedef enum {
   TOK_IF,
   TOK_ELSE,
   TOK_WHILE,
+  TOK_MATCH,
 
   TOK_ERROR,
   TOK_EOF,

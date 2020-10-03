@@ -31,7 +31,9 @@ typedef enum {
   OP_SET_LOCAL,
   OP_JUMP_IF_FALSE,
   OP_JUMP_IF_TRUE,
+  OP_JUMP_IF_NOT_MATCH,
   OP_LOOP,
+  OP_SWAP_STACK_TOP,
 
   OP_EXIT,
 } OpCode;
