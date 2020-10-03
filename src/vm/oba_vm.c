@@ -176,6 +176,8 @@ static ObaInterpretResult run(ObaVM* vm) {
   // clang-format off
 
 #define READ_BYTE() (*vm->ip++)
+#define READ_SHORT() \
+  (vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
@@ -263,6 +265,28 @@ do {                                                                           \
     case OP_FALSE:
       push(vm, OBA_BOOL(false));
       break;
+    case OP_JUMP_IF_FALSE: {
+      if (!IS_BOOL(peek(vm, 1))) {
+        runtimeError(vm, "Expected a boolean expression");
+        return OBA_RESULT_RUNTIME_ERROR;
+      }
+      int jump = READ_SHORT();
+      bool cond = AS_BOOL(peek(vm, 1));
+      if (!cond)
+        vm->ip += jump;
+      break;
+    }
+    case OP_JUMP_IF_TRUE: {
+      if (!IS_BOOL(peek(vm, 1))) {
+        runtimeError(vm, "Expected a boolean expression");
+        return OBA_RESULT_RUNTIME_ERROR;
+      }
+      int jump = READ_SHORT();
+      bool cond = AS_BOOL(peek(vm, 1));
+      if (cond)
+        vm->ip += jump;
+      break;
+    }
     case OP_DEFINE_GLOBAL: {
       ObjString* name = READ_STRING();
       tableSet(vm->globals, name, peek(vm, 1));

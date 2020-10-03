@@ -82,6 +82,8 @@ static void error(Compiler* compiler, const char* format, ...) {
 }
 // Forward declarations because the grammar is recursive.
 static void ignoreNewlines(Compiler*);
+static void statement(Compiler*);
+
 static void grouping(Compiler*, bool);
 static void unaryOp(Compiler*, bool);
 static void infixOp(Compiler*, bool);
@@ -319,6 +321,8 @@ GrammarRule rules[] =  {
   /* TOK_LET       */ UNUSED,
   /* TOK_TRUE      */ PREFIX(literal),
   /* TOK_FALSE     */ PREFIX(literal),
+  /* TOK_IF        */ UNUSED,  
+  /* TOK_ELSE      */ UNUSED,  
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -339,6 +343,8 @@ static Keyword keywords[] = {
     {"false", 5, TOK_FALSE},
     {"let",   3, TOK_LET},
     {"true",  4, TOK_TRUE},
+    {"if",    2, TOK_IF},
+    {"else",  4, TOK_ELSE},
     {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
@@ -636,11 +642,57 @@ static void block(Compiler* compiler) {
   exitScope(compiler);
 }
 
+static void patchJump(Compiler* compiler, int offset) {
+  Chunk* chunk = compiler->parser->vm->chunk;
+  // -2 to account for the placerholder bytes.
+  int jump = chunk->count - offset - 2;
+  if (jump > UINT16_MAX) {
+    error(compiler, "Too much code to jump over");
+    return;
+  }
+  chunk->code[offset] = (jump >> 8) & 0xff;
+  chunk->code[offset + 1] = jump & 0xff;
+}
+
+static int emitJump(Compiler* compiler, OpCode op) {
+  emitOp(compiler, op);
+  emitByte(compiler, 0xff);
+  emitByte(compiler, 0xff);
+  return compiler->parser->vm->chunk->count - 2;
+}
+
+static void ifStmt(Compiler* compiler) {
+  // Compile the conditional.
+  expression(compiler);
+
+  // Emit the jump instruction.
+  // When the VM reaches this, the value of the conditional is on the top of the
+  // stack, and it will jump based on that value's truthiness.
+  int offset = emitJump(compiler, OP_JUMP_IF_FALSE);
+  // Compile the "then" branch.
+  statement(compiler);
+  patchJump(compiler, offset);
+
+  // Compile the "else" branch.
+  if (match(compiler, TOK_ELSE)) {
+    // At this point the value of the conditional is still on the stack. Skip
+    // the else clause if it was truthy.
+    offset = emitJump(compiler, OP_JUMP_IF_TRUE);
+    statement(compiler);
+    patchJump(compiler, offset);
+  }
+
+  // Don't forget to pop the conditional
+  emitOp(compiler, OP_POP);
+}
+
 static void statement(Compiler* compiler) {
   if (match(compiler, TOK_DEBUG)) {
     debugStmt(compiler);
   } else if (match(compiler, TOK_LBRACK)) {
     block(compiler);
+  } else if (match(compiler, TOK_IF)) {
+    ifStmt(compiler);
   } else {
     expression(compiler);
   }
