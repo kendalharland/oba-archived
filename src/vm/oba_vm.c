@@ -370,5 +370,9 @@ ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
     return OBA_RESULT_COMPILE_ERROR;
   }
 
+  CallFrame* frame = &vm->frames[0];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm->stackTop;
   return interpret(vm);
 }
