@@ -29,7 +29,7 @@ void writeValueArray(ValueArray* array, Value value) {
   array->count++;
 }
 
-static Obj* allocateObject(size_t size, ObjType type) {
+Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
   return object;
@@ -37,7 +37,7 @@ static Obj* allocateObject(size_t size, ObjType type) {
 
 // FNV-1a hash function
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function.
-static ObjString* allocateString(char* chars, int length, uint32_t hash) {
+ObjString* allocateString(char* chars, int length, uint32_t hash) {
   ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   string->length = length;
   string->chars = chars;

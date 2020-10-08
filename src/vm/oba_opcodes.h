@@ -3,9 +3,8 @@
 #ifndef oba_opcodes_h
 #define oba_opcodes_h
 
-#include <stdint.h>
-
 #include "oba_value.h"
+#include <stdint.h>
 
 typedef enum {
   OP_CONSTANT,

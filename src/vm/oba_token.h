@@ -41,6 +41,7 @@ typedef enum {
   TOK_ELSE,
   TOK_WHILE,
   TOK_MATCH,
+  TOK_FN,
 
   TOK_ERROR,
   TOK_EOF,

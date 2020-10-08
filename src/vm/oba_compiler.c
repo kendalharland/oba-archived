@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "oba_compiler.h"
+#include "oba_function.h"
 #include "oba_memory.h"
 #include "oba_opcodes.h"
 #include "oba_token.h"
@@ -33,6 +34,10 @@ typedef struct {
 } Local;
 
 struct sCompiler {
+  // TODO(kendal): Replace the VM's chunk with this pointer
+  ObjFunction* function;
+  FunctionType type;
+
   Local locals[MAX_LOCALS];
   int localCount;
   int currentDepth;
@@ -41,13 +46,10 @@ struct sCompiler {
 
 void initCompiler(Compiler* compiler, Parser* parser) {
   compiler->parser = parser;
-  compiler->parser->vm->compiler = compiler;
   compiler->localCount = 0;
   compiler->currentDepth = 0;
-
-  compiler->parser->vm->chunk = (Chunk*)reallocate(NULL, 0, sizeof(Chunk));
-  initChunk(compiler->parser->vm->chunk);
-  compiler->parser->vm->ip = compiler->parser->vm->chunk->code;
+  compiler->function = newFunction();
+  compiler->type = TYPE_SCRIPT;
 }
 
 static void printError(Compiler* compiler, int line, const char* label,
@@ -97,7 +99,7 @@ static void declaration(Compiler*);
 // Bytecode -------------------------------------------------------------------
 
 static void emitByte(Compiler* compiler, int byte) {
-  writeChunk(compiler->parser->vm->chunk, byte);
+  writeChunk(&compiler->function->chunk, byte);
 }
 
 static void emitOp(Compiler* compiler, OpCode code) {
@@ -107,8 +109,8 @@ static void emitOp(Compiler* compiler, OpCode code) {
 // Adds [value] the the Vm's constant pool.
 // Returns the address of the new constant within the pool.
 static int addConstant(Compiler* compiler, Value value) {
-  writeValueArray(&compiler->parser->vm->chunk->constants, value);
-  return compiler->parser->vm->chunk->constants.count - 1;
+  writeValueArray(&compiler->function->chunk.constants, value);
+  return compiler->function->chunk.constants.count - 1;
 }
 
 // Registers [value] as a constant value.
@@ -127,7 +129,7 @@ static void emitBool(Compiler* compiler, Value value) {
 }
 
 static void patchJump(Compiler* compiler, int offset) {
-  Chunk* chunk = compiler->parser->vm->chunk;
+  Chunk* chunk = &compiler->function->chunk;
 
   // -2 to account for the placeholder bytes.
   int jump = chunk->count - offset - 2;
@@ -144,13 +146,13 @@ static int emitJump(Compiler* compiler, OpCode op) {
   emitOp(compiler, op);
   emitByte(compiler, 0xff);
   emitByte(compiler, 0xff);
-  return compiler->parser->vm->chunk->count - 2;
+  return compiler->function->chunk.count - 2;
 }
 
 static void emitLoop(Compiler* compiler, int start) {
   emitOp(compiler, OP_LOOP);
 
-  int jump = compiler->parser->vm->chunk->count - start - 2;
+  int jump = compiler->function->chunk.count - start - 2;
   if (jump > UINT16_MAX) {
     error(compiler, "Loop body too large");
     return;
@@ -364,6 +366,7 @@ GrammarRule rules[] =  {
   /* TOK_ELSE      */ UNUSED,  
   /* TOK_WHILE     */ UNUSED,  
   /* TOK_MATCH     */ PREFIX(matchExpr),
+  /* TOK_FN        */ UNUSED,
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -388,12 +391,11 @@ static Keyword keywords[] = {
     {"else",  4, TOK_ELSE},
     {"while", 5, TOK_WHILE},
     {"match", 5, TOK_MATCH},
+    {"fn",    2, TOK_FN},
     {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
 // clang-format on
-
-// Lexing ---------------------------------------------------------------------
 
 // Parsing --------------------------------------------------------------------
 
@@ -553,7 +555,6 @@ static void nextToken(Compiler* compiler) {
         skipLineComment(compiler);
         break;
       }
-
       makeToken(compiler, TOK_DIVIDE);
       return;
     case '"':
@@ -714,7 +715,7 @@ static void ifStmt(Compiler* compiler) {
 }
 
 static void whileStmt(Compiler* compiler) {
-  int loopStart = compiler->parser->vm->chunk->count;
+  int loopStart = compiler->function->chunk.count;
 
   // Compile the conditional.
   expression(compiler);
@@ -743,9 +744,32 @@ static void statement(Compiler* compiler) {
   }
 }
 
+static ObjFunction* compileGuardedFunction(compiler);
+static ObjFunction* compileExpressionFunction(compiler);
+
+static void function(Compiler* compiler) {
+  if (!match(compiler, TOK_IDENT)) {
+    error(compiler, "Expected an identifier");
+    return;
+  }
+
+  Token name = compiler->parser->previous;
+  if (!match(compiler, TOK_ASSIGN)) {
+    error(compiler, "Expected '=' after parameter list");
+    return;
+  }
+
+  /*
+  ObjFunction* function = compile(compiler->parser->tokenStart);
+  emitByte(OP_CONSTANT, addConstant(compiler, OBJ_VAL(function)));*/
+}
+
 static void declaration(Compiler* compiler) {
+  // TODO(kendal): Move this to statement.
   if (match(compiler, TOK_LET)) {
     assignStmt(compiler);
+  } else if (match(compiler, TOK_FN)) {
+    function(compiler);
   } else {
     statement(compiler);
   }
@@ -933,13 +957,12 @@ static void infixOp(Compiler* compiler, bool canAssign) {
 
 // Compiling ------------------------------------------------------------------
 
-bool obaCompile(ObaVM* vm, const char* source) {
+ObjFunction* obaCompile(const char* source) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
     source += 3;
 
   Parser parser;
-  parser.vm = vm;
   parser.source = source;
   parser.tokenStart = source;
   parser.currentChar = source;
@@ -966,5 +989,8 @@ bool obaCompile(ObaVM* vm, const char* source) {
   }
 
   emitOp(&compiler, OP_EXIT);
-  return parser.hasError;
+
+  if (parser.hasError)
+    return NULL;
+  return compiler.function;
 }

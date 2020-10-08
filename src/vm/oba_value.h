@@ -31,6 +31,7 @@
 
 typedef enum {
   OBJ_STRING,
+  OBJ_FUNCTION,
 } ObjType;
 
 typedef struct {
@@ -43,6 +44,8 @@ typedef struct {
   char* chars;
   uint32_t hash;
 } ObjString;
+
+typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
 
 // A tagged-union representing Oba values.
 typedef enum {
@@ -83,8 +86,8 @@ void writeValueArray(ValueArray*, Value);
 void printValue(Value value);
 
 ObjString* copyString(const char* chars, int length);
-static Obj* allocateObject(size_t size, ObjType type);
-static ObjString* allocateString(char* chars, int length, uint32_t hash);
+Obj* allocateObject(size_t size, ObjType type);
+ObjString* allocateString(char* chars, int length, uint32_t hash);
 ObjString* takeString(char* chars, int length);
 bool valuesEqual(Value a, Value b);
 

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "oba.h"
+#include "oba_function.h"
 #include "oba_memory.h"
 #include "oba_vm.h"
 
@@ -105,6 +106,7 @@ static bool tableSet(Table* table, ObjString* key, Value value) {
 // VM -------------------------------------------------------------------------
 
 static void resetStack(ObaVM* vm) { vm->stackTop = vm->stack; }
+static void resetFrames(ObaVM* vm) { vm->frame = vm->frames; }
 
 ObaVM* obaNewVM() {
   // TODO(kendal): sizeof(ObaVM) here instead?
@@ -114,11 +116,12 @@ ObaVM* obaNewVM() {
   vm->globals = (Table*)realloc(NULL, sizeof(Table));
   initTable(vm->globals);
   resetStack(vm);
+  resetFrames(vm);
   return vm;
 }
 
 void obaFreeVM(ObaVM* vm) {
-  freeChunk(vm->chunk);
+  freeChunk(&vm->frame->function->chunk);
   freeTable(vm->globals);
   vm->stackTop = NULL;
   free(vm);
@@ -135,7 +138,6 @@ static void push(ObaVM* vm, Value value) {
 }
 
 static Value pop(ObaVM* vm) {
-  // TODO(kendal): Handle vm->stackTop == vm->stack?
   vm->stackTop--;
   return *vm->stackTop;
 }
@@ -149,8 +151,8 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
 
   // TODO(kendal): Capture op line info
   /*
-  size_t instruction = vm->ip - vm->chunk->code - 1;
-  int line = vm->chunk->lines[instruction];
+  size_t instruction = vm->frame->ip - vm->frame->function->chunk.code - 1;
+  int line = vm->frame->function->chunk.lines[instruction];
   fprintf(stderr, "[line %d] in script\n", line);
   */
   resetStack(vm);
@@ -175,10 +177,10 @@ static ObaInterpretResult run(ObaVM* vm) {
 
   // clang-format off
 
-#define READ_BYTE() (*vm->ip++)
+#define READ_BYTE() (*vm->frame->ip++)
 #define READ_SHORT() \
-  (vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
-#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+  (vm->frame->ip += 2, (uint16_t)((vm->frame->ip[-2] << 8) | vm->frame->ip[-1]))
+#define READ_CONSTANT() (vm->frame->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
 #define BINARY_OP(type, op)                                                    \
@@ -199,7 +201,9 @@ do {                                                                           \
 
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    disassembleInstruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+    disassembleInstruction(
+        vm->frame->function->chunk,
+        (int)(vm->frame->ip - vm->frame->function->chunk.code));
     printf("          ");
     for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
       printf("[ ");
@@ -273,7 +277,7 @@ do {                                                                           \
       int jump = READ_SHORT();
       bool cond = AS_BOOL(peek(vm, 1));
       if (!cond)
-        vm->ip += jump;
+        vm->frame->ip += jump;
       break;
     }
     case OP_JUMP_IF_TRUE: {
@@ -284,7 +288,7 @@ do {                                                                           \
       int jump = READ_SHORT();
       bool cond = AS_BOOL(peek(vm, 1));
       if (cond)
-        vm->ip += jump;
+        vm->frame->ip += jump;
       break;
     }
     case OP_JUMP_IF_NOT_MATCH: {
@@ -293,12 +297,12 @@ do {                                                                           \
       Value a = peek(vm, 2);
       Value b = pop(vm);
       if (!valuesEqual(b, a)) {
-        vm->ip += jump;
+        vm->frame->ip += jump;
       }
       break;
     }
     case OP_LOOP: {
-      vm->ip = vm->chunk->code + READ_SHORT();
+      vm->frame->ip = vm->frame->function->chunk.code + READ_SHORT();
       break;
     }
     case OP_DEFINE_GLOBAL: {
@@ -319,13 +323,13 @@ do {                                                                           \
     }
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      vm->stack[slot] = peek(vm, 1);
+      vm->frame->slots[slot] = peek(vm, 1);
       break;
     }
     case OP_GET_LOCAL: {
       // Locals live on the top of the stack.
       uint8_t slot = READ_BYTE();
-      push(vm, vm->stack[slot]);
+      push(vm, vm->frame->slots[slot]);
       break;
     }
     case OP_SWAP_STACK_TOP: {
@@ -353,16 +357,18 @@ do {                                                                           \
 }
 
 static ObaInterpretResult interpret(ObaVM* vm) {
-  if (vm->chunk == NULL || vm->chunk->code == NULL)
+  if (vm->frame->function->chunk.code == NULL)
     return OBA_RESULT_SUCCESS;
 
-  vm->ip = vm->chunk->code;
+  vm->frame->ip = vm->frame->function->chunk.code;
   return run(vm);
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-  if (obaCompile(vm, source)) {
+  ObjFunction* function = obaCompile(source);
+  if (function == NULL) {
     return OBA_RESULT_COMPILE_ERROR;
   }
+
   return interpret(vm);
 }
