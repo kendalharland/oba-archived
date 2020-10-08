@@ -743,7 +743,7 @@ static void statement(Compiler* compiler) {
   }
 }
 
-static void function(Compiler* compiler) {
+static void functionDefinition(Compiler* compiler) {
   if (!match(compiler, TOK_IDENT)) {
     error(compiler, "Expected an identifier");
     return;
@@ -755,8 +755,10 @@ static void function(Compiler* compiler) {
     return;
   }
 
+  ignoreNewlines(compiler);
   ObjFunction* function = obaCompile(compiler->parser->tokenStart);
   emitConstant(compiler, OBJ_VAL(function));
+  // All functions in oba are global.
 }
 
 static void declaration(Compiler* compiler) {
@@ -764,7 +766,7 @@ static void declaration(Compiler* compiler) {
   if (match(compiler, TOK_LET)) {
     assignStmt(compiler);
   } else if (match(compiler, TOK_FN)) {
-    function(compiler);
+    functionDefinition(compiler);
   } else {
     statement(compiler);
   }

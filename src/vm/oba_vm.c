@@ -108,6 +108,42 @@ static bool tableSet(Table* table, ObjString* key, Value value) {
 static void resetStack(ObaVM* vm) { vm->stackTop = vm->stack; }
 static void resetFrames(ObaVM* vm) { vm->frame = vm->frames; }
 
+static void runtimeError(ObaVM* vm, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  // TODO(kendal): Capture op line info
+  /*
+  size_t instruction = vm->frame->ip - vm->frame->function->chunk.code - 1;
+  int line = vm->frame->function->chunk.lines[instruction];
+  fprintf(stderr, "[line %d] in script\n", line);
+  */
+  resetStack(vm);
+}
+
+static bool call(ObaVM* vm, ObjFunction* function, int arity) {
+  printf("Called %s", function->name);
+  return true;
+}
+
+static bool callValue(ObaVM* vm, Value value, int arity) {
+  if (IS_OBJ(value)) {
+    switch (OBJ_TYPE(value)) {
+    case OBJ_FUNCTION:
+      return call(vm, AS_FUNCTION(value), arity);
+    default:
+      // Non-callable
+      break;
+    }
+  }
+
+  runtimeError(vm, "Can only call functions");
+  return false;
+}
+
 ObaVM* obaNewVM() {
   // TODO(kendal): sizeof(ObaVM) here instead?
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
@@ -140,22 +176,6 @@ static void push(ObaVM* vm, Value value) {
 static Value pop(ObaVM* vm) {
   vm->stackTop--;
   return *vm->stackTop;
-}
-
-static void runtimeError(ObaVM* vm, const char* format, ...) {
-  va_list args;
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-  fputs("\n", stderr);
-
-  // TODO(kendal): Capture op line info
-  /*
-  size_t instruction = vm->frame->ip - vm->frame->function->chunk.code - 1;
-  int line = vm->frame->function->chunk.lines[instruction];
-  fprintf(stderr, "[line %d] in script\n", line);
-  */
-  resetStack(vm);
 }
 
 static void concatenate(ObaVM* vm) {
@@ -337,6 +357,12 @@ do {                                                                           \
       Value next = pop(vm);
       push(vm, top);
       push(vm, next);
+      break;
+    }
+    case OP_CALL: {
+      if (!callValue(vm, peek(vm, 1), 0)) {
+        return OBA_RESULT_RUNTIME_ERROR;
+      }
       break;
     }
     case OP_POP:

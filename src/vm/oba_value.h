@@ -17,18 +17,18 @@
 #define IS_NUMBER(value) ((value).type == VAL_NUMBER)
 #define IS_OBJ(value) ((value).type == VAL_OBJ)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
-
+#define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 // Macros for converting from Oba to C.
 #define AS_BOOL(value) ((value).as.boolean)
 #define AS_NUMBER(value) ((value).as.number)
 #define AS_OBJ(value) ((value).as.obj)
+#define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 
 // An Oba object in heap memory.
-
 typedef enum {
   OBJ_STRING,
   OBJ_FUNCTION,
