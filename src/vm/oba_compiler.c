@@ -34,7 +34,7 @@ typedef struct {
 } Local;
 
 struct sCompiler {
-  // TODO(kendal): Replace the VM's chunk with this pointer
+  Compiler* parent;
   ObjFunction* function;
   FunctionType type;
 
@@ -44,7 +44,8 @@ struct sCompiler {
   Parser* parser;
 };
 
-void initCompiler(Compiler* compiler, Parser* parser) {
+void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent) {
+  compiler->parent = parent;
   compiler->parser = parser;
   compiler->localCount = 0;
   compiler->currentDepth = 0;
@@ -82,10 +83,10 @@ static void error(Compiler* compiler, const char* format, ...) {
   printError(compiler, compiler->parser->currentLine, "Error", format, args);
   va_end(args);
 }
+
 // Forward declarations because the grammar is recursive.
 static void ignoreNewlines(Compiler*);
 static void statement(Compiler*);
-
 static void grouping(Compiler*, bool);
 static void unaryOp(Compiler*, bool);
 static void infixOp(Compiler*, bool);
@@ -93,8 +94,11 @@ static void identifier(Compiler*, bool);
 static void literal(Compiler*, bool);
 static void string(Compiler*, bool);
 static void matchExpr(Compiler*, bool);
-
 static void declaration(Compiler*);
+
+// Forward declaration for compling function definitions
+ObjFunction* compile(const char* source, Compiler* parent, const char* name,
+                     int nameLength, bool isFunction);
 
 // Bytecode -------------------------------------------------------------------
 
@@ -345,6 +349,7 @@ GrammarRule rules[] =  {
   /* TOK_LTE       */ INFIX_OPERATOR(PREC_COND, "<="),
   /* TOK_EQ        */ INFIX_OPERATOR(PREC_COND, "=="),
   /* TOK_NEQ       */ INFIX_OPERATOR(PREC_COND, "!="),
+  /* TOK_COLON     */ UNUSED,
   /* TOK_GUARD     */ UNUSED,
   /* TOK_LPAREN    */ PREFIX(grouping),  
   /* TOK_RPAREN    */ UNUSED, 
@@ -513,6 +518,9 @@ static void nextToken(Compiler* compiler) {
       break;
     case '\n':
       makeToken(compiler, TOK_NEWLINE);
+      return;
+    case ':':
+      makeToken(compiler, TOK_COLON);
       return;
     case '|':
       makeToken(compiler, TOK_GUARD);
@@ -750,15 +758,17 @@ static void functionDefinition(Compiler* compiler) {
   }
 
   Token name = compiler->parser->previous;
+
   if (!match(compiler, TOK_ASSIGN)) {
     error(compiler, "Expected '=' after parameter list");
     return;
   }
 
   ignoreNewlines(compiler);
-  ObjFunction* function = obaCompile(compiler->parser->tokenStart);
-  emitConstant(compiler, OBJ_VAL(function));
-  // All functions in oba are global.
+  ObjFunction* fn = compile(compiler->parser->tokenStart, compiler, name.start,
+                            name.length, true);
+  emitConstant(compiler, OBJ_VAL(fn));
+  defineVariable(compiler, declareVariable(compiler, name));
 }
 
 static void declaration(Compiler* compiler) {
@@ -800,9 +810,22 @@ static void assignment(Compiler* compiler, bool canAssign) {
   setVariable(compiler, name);
 }
 
+static void functionCall(Compiler* compiler, bool canAssign) {
+  Token name = compiler->parser->previous;
+  getVariable(compiler);
+  consume(compiler, TOK_COLON, "Expected ':'");
+
+  // TODO(kendal): Compile parameters.
+  emitOp(compiler, OP_CALL);
+}
+
 static void identifier(Compiler* compiler, bool canAssign) {
   if (peek(compiler) == TOK_ASSIGN) {
     assignment(compiler, canAssign);
+    return;
+  }
+  if (peek(compiler) == TOK_COLON) {
+    functionCall(compiler, canAssign);
     return;
   }
   getVariable(compiler);
@@ -954,7 +977,26 @@ static void infixOp(Compiler* compiler, bool canAssign) {
 
 // Compiling ------------------------------------------------------------------
 
-ObjFunction* obaCompile(const char* source) {
+ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
+                         int debugNameLength) {
+  if (compiler->parser->hasError) {
+    return NULL;
+  }
+
+  // Make sure we don't leave the parent compiler's parser "behind".
+  if (compiler->parent != NULL) {
+    // TODO(kendal): Consider just keeping a stack of compilers on the VM,
+    // which would also prevent us from having to fixup the VM's ip and frame
+    // before executing the compiled code.
+    compiler->function->name = copyString(debugName, debugNameLength);
+    compiler->parent->parser = compiler->parser;
+  }
+
+  return compiler->function;
+}
+
+ObjFunction* compile(const char* source, Compiler* parent, const char* name,
+                     int nameLength, bool isFunction) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
     source += 3;
@@ -971,23 +1013,28 @@ ObjFunction* obaCompile(const char* source) {
   parser.hasError = false;
 
   Compiler compiler;
-  initCompiler(&compiler, &parser);
+  initCompiler(&compiler, &parser, parent);
 
   nextToken(&compiler);
   ignoreNewlines(&compiler);
 
-  while (!match(&compiler, TOK_EOF)) {
-    declaration(&compiler);
-    // If no newline, the file must end on this line.
-    if (!matchLine(&compiler)) {
-      consume(&compiler, TOK_EOF, "Expected end of file.");
-      break;
+  if (isFunction) {
+    expression(&compiler);
+  } else {
+    while (!match(&compiler, TOK_EOF)) {
+      declaration(&compiler);
+      // If no newline, the file must end on this line.
+      if (!matchLine(&compiler)) {
+        consume(&compiler, TOK_EOF, "Expected end of file.");
+        break;
+      }
     }
+    emitOp(&compiler, OP_EXIT);
   }
 
-  emitOp(&compiler, OP_EXIT);
+  return endCompiler(&compiler, name, nameLength);
+}
 
-  if (parser.hasError)
-    return NULL;
-  return compiler.function;
+ObjFunction* obaCompile(const char* source) {
+  return compile(source, NULL, "(script)", 8, false);
 }

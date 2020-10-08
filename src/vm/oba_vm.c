@@ -125,7 +125,7 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
 }
 
 static bool call(ObaVM* vm, ObjFunction* function, int arity) {
-  printf("Called %s", function->name);
+  printf("Called %s\n", function->name->chars);
   return true;
 }
 

@@ -108,6 +108,9 @@ void printObject(Value value) {
   case OBJ_STRING:
     printf("%s", AS_CSTRING(value));
     break;
+  case OBJ_FUNCTION:
+    printf("%s", AS_FUNCTION(value)->name);
+    break;
   }
 }
 

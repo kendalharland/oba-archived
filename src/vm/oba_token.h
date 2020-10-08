@@ -16,6 +16,7 @@ typedef enum {
   TOK_LTE,
   TOK_EQ,
   TOK_NEQ,
+  TOK_COLON,
   TOK_GUARD,
   TOK_LPAREN,
   TOK_RPAREN,
