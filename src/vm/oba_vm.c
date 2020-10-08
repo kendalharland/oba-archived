@@ -202,7 +202,7 @@ do {                                                                           \
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     disassembleInstruction(
-        vm->frame->function->chunk,
+        &vm->frame->function->chunk,
         (int)(vm->frame->ip - vm->frame->function->chunk.code));
     printf("          ");
     for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {

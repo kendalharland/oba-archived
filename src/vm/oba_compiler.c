@@ -719,7 +719,6 @@ static void whileStmt(Compiler* compiler) {
 
   // Compile the conditional.
   expression(compiler);
-
   int offset = emitJump(compiler, OP_JUMP_IF_FALSE);
   statement(compiler);
 
@@ -744,9 +743,6 @@ static void statement(Compiler* compiler) {
   }
 }
 
-static ObjFunction* compileGuardedFunction(compiler);
-static ObjFunction* compileExpressionFunction(compiler);
-
 static void function(Compiler* compiler) {
   if (!match(compiler, TOK_IDENT)) {
     error(compiler, "Expected an identifier");
@@ -759,9 +755,8 @@ static void function(Compiler* compiler) {
     return;
   }
 
-  /*
-  ObjFunction* function = compile(compiler->parser->tokenStart);
-  emitByte(OP_CONSTANT, addConstant(compiler, OBJ_VAL(function)));*/
+  ObjFunction* function = obaCompile(compiler->parser->tokenStart);
+  emitConstant(compiler, OBJ_VAL(function));
 }
 
 static void declaration(Compiler* compiler) {
