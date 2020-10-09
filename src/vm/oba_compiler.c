@@ -751,6 +751,8 @@ static void statement(Compiler* compiler) {
   }
 }
 
+// TODO(kendal): Compile the parameter list.
+// TODO(kendal): Compile function guards.
 static void functionDefinition(Compiler* compiler) {
   if (!match(compiler, TOK_IDENT)) {
     error(compiler, "Expected an identifier");
