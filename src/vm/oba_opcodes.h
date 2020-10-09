@@ -34,6 +34,7 @@ typedef enum {
   OP_LOOP,
   OP_SWAP_STACK_TOP,
   OP_CALL,
+  OP_RETURN,
 
   OP_EXIT,
 } OpCode;

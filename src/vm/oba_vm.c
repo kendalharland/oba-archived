@@ -125,8 +125,22 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
 }
 
 static bool call(ObaVM* vm, ObjFunction* function, int arity) {
-  printf("Called %s\n", function->name->chars);
+  vm->frame++;
+  if (vm->frame - vm->frames > FRAMES_MAX) {
+    runtimeError(vm, "Too many nested function calls");
+    return false;
+  }
+  vm->frame->function = function;
+  vm->frame->ip = function->chunk.code;
+  vm->frame->slots = vm->stackTop;
   return true;
+}
+
+static void return_(ObaVM* vm) {
+  vm->frame->function = NULL;
+  vm->frame->ip = NULL;
+  vm->frame->slots = NULL;
+  vm->frame--;
 }
 
 static bool callValue(ObaVM* vm, Value value, int arity) {
@@ -365,6 +379,9 @@ do {                                                                           \
       }
       break;
     }
+    case OP_RETURN:
+      return_(vm);
+      break;
     case OP_POP:
       pop(vm);
       break;

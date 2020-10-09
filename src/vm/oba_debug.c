@@ -94,6 +94,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_SWAP_STACK_TOP", chunk, offset);
   case OP_CALL:
     return constantInstruction("OP_CALL", chunk, offset);
+  case OP_RETURN:
+    return simpleInstruction("OP_CALL", chunk, offset);
   case OP_DEBUG:
     return simpleInstruction("OP_DEBUG", chunk, offset);
   case OP_EXIT:

@@ -990,6 +990,8 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
     // before executing the compiled code.
     compiler->function->name = copyString(debugName, debugNameLength);
     compiler->parent->parser = compiler->parser;
+
+    emitOp(compiler, OP_RETURN);
   }
 
   return compiler->function;
