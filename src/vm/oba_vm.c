@@ -374,7 +374,7 @@ do {                                                                           \
       break;
     }
     case OP_CALL: {
-      if (!callValue(vm, peek(vm, 1), 0)) {
+      if (!callValue(vm, pop(vm), 0)) {
         return OBA_RESULT_RUNTIME_ERROR;
       }
       break;

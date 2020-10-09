@@ -1,0 +1,4 @@
+fn number = 5
+let result = 1 + number:
+debug result
+
