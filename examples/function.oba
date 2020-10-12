@@ -1,3 +1,0 @@
-fn double x = 2 * x
-
-debug double(4)

@@ -1,6 +1,9 @@
+// expect: 0
+// expect: 1
+// expect: 2
 {
   let count = 0
-  while count < 10 {
+  while count < 3{
     debug count
     count = count + 1
   }

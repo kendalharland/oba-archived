@@ -59,7 +59,7 @@ static void printError(Compiler* compiler, int line, const char* label,
   int length = sprintf(message, "%s: ", label);
   length += vsprintf(message + length, format, args);
   // TODO(kendal): Ensure length < 1024
-  printf("%s\n", message);
+  fprintf(stderr, "%s\n", message);
 }
 
 static void lexError(Compiler* compiler, const char* format, ...) {
@@ -67,7 +67,8 @@ static void lexError(Compiler* compiler, const char* format, ...) {
 
   va_list args;
   va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Error", format, args);
+  printError(compiler, compiler->parser->currentLine, "Parse error", format,
+             args);
   va_end(args);
 }
 
@@ -80,7 +81,8 @@ static void error(Compiler* compiler, const char* format, ...) {
 
   va_list args;
   va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Error", format, args);
+  printError(compiler, compiler->parser->currentLine, "Compile error", format,
+             args);
   va_end(args);
 }
 
@@ -129,6 +131,18 @@ static void emitConstant(Compiler* compiler, Value value) {
 
 static void emitBool(Compiler* compiler, Value value) {
   AS_BOOL(value) ? emitOp(compiler, OP_TRUE) : emitOp(compiler, OP_FALSE);
+}
+
+static void emitError(Compiler* compiler, const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  char message[1024];
+  int length = vsprintf(message, format, args);
+  // TODO(kendal): Ensure length < 1024
+
+  Value error = OBJ_VAL(copyString(message, length));
+  emitOp(compiler, OP_ERROR);
+  emitByte(compiler, addConstant(compiler, error));
 }
 
 static void patchJump(Compiler* compiler, int offset) {
@@ -189,13 +203,16 @@ static void addLocal(Compiler* compiler, Token name) {
   local->depth = -1;
 }
 
-static void defineLocal(Compiler* compiler) {
+static void markInitialized(Compiler* compiler) {
   // We cannot have declared any new locals before defining this one, because
   // assignments do not nest inside expressions. The local we're defining is
   // the most recent one.
   Local* local = &compiler->locals[compiler->localCount - 1];
   local->depth = compiler->currentDepth;
+}
 
+static void defineLocal(Compiler* compiler) {
+  markInitialized(compiler);
   setLocal(compiler, compiler->localCount - 1);
 }
 
@@ -228,9 +245,9 @@ static int declareVariable(Compiler* compiler, Token name) {
 }
 
 static void defineVariable(Compiler* compiler, int variable) {
-  // Local variables live on the stack, so we don't need to define anything.
   if (compiler->currentDepth > 0) {
-    defineLocal(compiler);
+    // Local variables live on the stack, so we don't need to set anything.
+    markInitialized(compiler);
     return;
   }
 
@@ -758,7 +775,10 @@ static void functionBody(Compiler* compiler) { expression(compiler); }
 
 static void parameterList(Compiler* compiler) {
   while (!match(compiler, TOK_ASSIGN)) {
-    consume(compiler, TOK_IDENT, "Expected parameter name");
+    if (!match(compiler, TOK_IDENT)) {
+      error(compiler, "Expected parameter name");
+      return;
+    }
     int local = declareVariable(compiler, compiler->parser->previous);
     defineVariable(compiler, local);
     compiler->function->arity++;
@@ -869,10 +889,10 @@ static void pattern(Compiler* compiler) {
   Token token = compiler->parser->previous;
   switch (token.type) {
   case TOK_TRUE:
-    emitConstant(compiler, OBA_BOOL(true));
+    emitOp(compiler, OP_TRUE);
     break;
   case TOK_FALSE:
-    emitConstant(compiler, OBA_BOOL(false));
+    emitOp(compiler, OP_FALSE);
     break;
   case TOK_NUMBER:
     emitConstant(compiler, token.value);
@@ -902,11 +922,6 @@ static void matchExprCase(Compiler* compiler) {
   // Compile the body, which only gets evaluated if the pattern above matched.
   expression(compiler);
 
-  // If the expression was evaluated, its value is sitting on top of the stack
-  // above the original match value, and should be the return value of the
-  // entire expression. Swap them so that this expression's value is returned.
-  emitOp(compiler, OP_SWAP_STACK_TOP);
-
   int skipOtherCases = emitJump(compiler, OP_JUMP);
   patchJump(compiler, skipThisCase);
 
@@ -914,6 +929,10 @@ static void matchExprCase(Compiler* compiler) {
   ignoreNewlines(compiler);
   if (match(compiler, TOK_GUARD)) {
     matchExprCase(compiler);
+  } else {
+    // This is the last expression case. Insert an error because the entire
+    // expression evaluates to nothing if this one is not matched.
+    emitError(compiler, "Match expression evaluated to nothing");
   }
 
   patchJump(compiler, skipOtherCases);
@@ -930,11 +949,7 @@ static void matchExpr(Compiler* compiler, bool canAssign) {
   }
 
   matchExprCase(compiler);
-
   consume(compiler, TOK_SEMICOLON, "Expected ';'");
-
-  // Clean up the stack.
-  emitOp(compiler, OP_POP);
 }
 
 static void literal(Compiler* compiler, bool canAssign) {

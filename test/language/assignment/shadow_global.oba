@@ -1,0 +1,9 @@
+let var = 1
+
+{
+  let var = "hello"
+  debug var // expect: hello
+}
+
+debug var // expect: 1
+

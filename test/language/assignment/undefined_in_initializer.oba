@@ -1,0 +1,8 @@
+{
+  let a = "hi"
+  {
+    // expect compile error: Cannot read local variable in its own initializer
+    let a = a
+    debug a
+  }
+}

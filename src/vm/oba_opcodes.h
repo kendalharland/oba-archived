@@ -8,6 +8,7 @@
 
 typedef enum {
   OP_CONSTANT,
+  OP_ERROR,
   OP_ADD,
   OP_MINUS,
   OP_MULTIPLY,
@@ -33,7 +34,6 @@ typedef enum {
   OP_JUMP_IF_TRUE,
   OP_JUMP_IF_NOT_MATCH,
   OP_LOOP,
-  OP_SWAP_STACK_TOP,
   OP_CALL,
   OP_RETURN,
 

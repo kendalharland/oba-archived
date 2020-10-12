@@ -44,6 +44,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
   switch (instr) {
   case OP_CONSTANT:
     return constantInstruction("OP_CONSTANT", chunk, offset);
+  case OP_ERROR:
+    return constantInstruction("OP_ERROR", chunk, offset);
   case OP_ADD:
     return simpleInstruction("OP_ADD", chunk, offset);
   case OP_MINUS:
@@ -92,8 +94,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return jumpInstruction("OP_JUMP_IF_NOT_MATCH", 1, chunk, offset);
   case OP_LOOP:
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
-  case OP_SWAP_STACK_TOP:
-    return simpleInstruction("OP_SWAP_STACK_TOP", chunk, offset);
   case OP_CALL:
     return constantInstruction("OP_CALL", chunk, offset);
   case OP_RETURN:

@@ -111,6 +111,7 @@ static void resetFrames(ObaVM* vm) { vm->frame = vm->frames; }
 static void runtimeError(ObaVM* vm, const char* format, ...) {
   va_list args;
   va_start(args, format);
+  fprintf(stderr, "Runtime error: ");
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
@@ -125,6 +126,12 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
 }
 
 static bool call(ObaVM* vm, ObjFunction* function, int arity) {
+  if (arity != function->arity) {
+    runtimeError(vm, "Expected %d arguments but got %d", function->arity,
+                 arity);
+    return false;
+  }
+
   vm->frame++;
   if (vm->frame - vm->frames > FRAMES_MAX) {
     runtimeError(vm, "Too many nested function calls");
@@ -132,7 +139,7 @@ static bool call(ObaVM* vm, ObjFunction* function, int arity) {
   }
   vm->frame->function = function;
   vm->frame->ip = function->chunk.code;
-  vm->frame->slots = vm->stackTop - arity - 1;
+  vm->frame->slots = vm->stackTop - arity;
   return true;
 }
 
@@ -164,7 +171,9 @@ ObaVM* obaNewVM() {
 }
 
 void obaFreeVM(ObaVM* vm) {
-  freeChunk(&vm->frame->function->chunk);
+  if (vm->frame->function != NULL) {
+    freeChunk(&vm->frame->function->chunk);
+  }
   freeTable(vm->globals);
   vm->stackTop = NULL;
   free(vm);
@@ -187,7 +196,8 @@ static Value pop(ObaVM* vm) {
 
 static void return_(ObaVM* vm) {
   Value value = pop(vm);
-  vm->stackTop = vm->frame->slots;
+  // -1 because the function itself is right before the slot pointer.
+  vm->stackTop = vm->frame->slots - 1;
   push(vm, value);
   vm->frame->function = NULL;
   vm->frame->ip = NULL;
@@ -255,6 +265,9 @@ do {                                                                           \
     case OP_CONSTANT:
       push(vm, READ_CONSTANT());
       break;
+    case OP_ERROR:
+      runtimeError(vm, AS_CSTRING(READ_CONSTANT()));
+      return OBA_RESULT_RUNTIME_ERROR;
     case OP_ADD:
       BINARY_OP(OBA_NUMBER, +);
       break;
@@ -338,7 +351,9 @@ do {                                                                           \
       Value b = pop(vm);
       if (!valuesEqual(b, a)) {
         vm->frame->ip += jump;
+        break;
       }
+      pop(vm);
       break;
     }
     case OP_LOOP: {
@@ -372,13 +387,6 @@ do {                                                                           \
       push(vm, vm->frame->slots[slot]);
       break;
     }
-    case OP_SWAP_STACK_TOP: {
-      Value top = pop(vm);
-      Value next = pop(vm);
-      push(vm, top);
-      push(vm, next);
-      break;
-    }
     case OP_CALL: {
       uint8_t argCount = READ_BYTE();
       if (!callValue(vm, peek(vm, argCount + 1), argCount)) {
@@ -394,7 +402,6 @@ do {                                                                           \
       break;
     case OP_DEBUG: {
       Value value = pop(vm);
-      printf("DEBUG: ");
       printValue(value);
       printf("\n");
       break;

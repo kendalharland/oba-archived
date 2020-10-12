@@ -1,2 +1,0 @@
-debug "This is a string"
-debug "This is a " + "concatenated" + " string"

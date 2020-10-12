@@ -1,3 +1,0 @@
-fn flip bit = match bit | 0 = 1 | bit = flip(bit-1);
-
-debug flip(1)

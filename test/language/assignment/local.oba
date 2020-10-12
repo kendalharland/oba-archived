@@ -1,0 +1,5 @@
+{ 
+  let x = 50
+  debug x // expect: 50
+}
+

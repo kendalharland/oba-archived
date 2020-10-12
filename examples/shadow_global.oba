@@ -1,9 +1,0 @@
-let a = "hi"
-
-{
-  let a = "hello"
-  debug a
-}
-
-debug a
-

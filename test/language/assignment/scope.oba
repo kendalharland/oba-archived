@@ -1,0 +1,4 @@
+{
+  let x = 50
+}
+debug x // expect runtime error: Undefined variable: x
