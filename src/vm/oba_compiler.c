@@ -96,9 +96,8 @@ static void string(Compiler*, bool);
 static void matchExpr(Compiler*, bool);
 static void declaration(Compiler*);
 
-// Forward declaration for compling function definitions
-ObjFunction* compile(const char* source, Compiler* parent, const char* name,
-                     int nameLength, bool isFunction);
+ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
+                         int debugNameLength);
 
 // Bytecode -------------------------------------------------------------------
 
@@ -257,7 +256,7 @@ static void getLocal(Compiler* compiler, int slot) {
   emitByte(compiler, (uint8_t)slot);
 }
 
-// Finds a local variabled named [name] in the current scope.
+// Finds a local variable named [name] in the current scope.
 // Returns a negative number if it is not found.
 static int lookupLocal(Compiler* compiler, Token name) {
   // Find the first local whose depth is gte the current scope and whose
@@ -349,7 +348,8 @@ GrammarRule rules[] =  {
   /* TOK_LTE       */ INFIX_OPERATOR(PREC_COND, "<="),
   /* TOK_EQ        */ INFIX_OPERATOR(PREC_COND, "=="),
   /* TOK_NEQ       */ INFIX_OPERATOR(PREC_COND, "!="),
-  /* TOK_COLON     */ UNUSED,
+  /* TOK_COMMA     */ UNUSED,
+  /* TOK_SEMICOLON */ UNUSED,
   /* TOK_GUARD     */ UNUSED,
   /* TOK_LPAREN    */ PREFIX(grouping),  
   /* TOK_RPAREN    */ UNUSED, 
@@ -519,8 +519,11 @@ static void nextToken(Compiler* compiler) {
     case '\n':
       makeToken(compiler, TOK_NEWLINE);
       return;
-    case ':':
-      makeToken(compiler, TOK_COLON);
+    case ',':
+      makeToken(compiler, TOK_COMMA);
+      return;
+    case ';':
+      makeToken(compiler, TOK_SEMICOLON);
       return;
     case '|':
       makeToken(compiler, TOK_GUARD);
@@ -751,7 +754,17 @@ static void statement(Compiler* compiler) {
   }
 }
 
-// TODO(kendal): Compile the parameter list.
+static void functionBody(Compiler* compiler) { expression(compiler); }
+
+static void parameterList(Compiler* compiler) {
+  while (!match(compiler, TOK_ASSIGN)) {
+    consume(compiler, TOK_IDENT, "Expected parameter name");
+    int local = declareVariable(compiler, compiler->parser->previous);
+    defineVariable(compiler, local);
+    compiler->function->arity++;
+  }
+}
+
 // TODO(kendal): Compile function guards.
 static void functionDefinition(Compiler* compiler) {
   if (!match(compiler, TOK_IDENT)) {
@@ -759,16 +772,17 @@ static void functionDefinition(Compiler* compiler) {
     return;
   }
 
+  Compiler fnCompiler;
+  initCompiler(&fnCompiler, compiler->parser, compiler);
+
   Token name = compiler->parser->previous;
 
-  if (!match(compiler, TOK_ASSIGN)) {
-    error(compiler, "Expected '=' after parameter list");
-    return;
-  }
+  enterScope(&fnCompiler);
+  parameterList(&fnCompiler);
+  ignoreNewlines(&fnCompiler);
+  functionBody(&fnCompiler);
+  ObjFunction* fn = endCompiler(&fnCompiler, name.start, name.length);
 
-  ignoreNewlines(compiler);
-  ObjFunction* fn = compile(compiler->parser->tokenStart, compiler, name.start,
-                            name.length, true);
   emitConstant(compiler, OBJ_VAL(fn));
   defineVariable(compiler, declareVariable(compiler, name));
 }
@@ -812,13 +826,28 @@ static void assignment(Compiler* compiler, bool canAssign) {
   setVariable(compiler, name);
 }
 
+static uint8_t argumentList(Compiler* compiler) {
+  uint8_t argCount = 0;
+
+  if (peek(compiler) == TOK_RPAREN) {
+    return argCount;
+  }
+
+  do {
+    argCount++;
+    expression(compiler);
+  } while (match(compiler, TOK_COMMA));
+  return argCount;
+}
+
 static void functionCall(Compiler* compiler, bool canAssign) {
   Token name = compiler->parser->previous;
   getVariable(compiler);
-  consume(compiler, TOK_COLON, "Expected ':'");
-
-  // TODO(kendal): Compile parameters.
+  consume(compiler, TOK_LPAREN, "Expected '('");
+  uint8_t argCount = argumentList(compiler);
+  consume(compiler, TOK_RPAREN, "Expected ')'");
   emitOp(compiler, OP_CALL);
+  emitByte(compiler, argCount);
 }
 
 static void identifier(Compiler* compiler, bool canAssign) {
@@ -826,7 +855,7 @@ static void identifier(Compiler* compiler, bool canAssign) {
     assignment(compiler, canAssign);
     return;
   }
-  if (peek(compiler) == TOK_COLON) {
+  if (peek(compiler) == TOK_LPAREN) {
     functionCall(compiler, canAssign);
     return;
   }
@@ -852,6 +881,9 @@ static void pattern(Compiler* compiler) {
     emitConstant(compiler,
                  OBJ_VAL(copyString(token.start + 1, token.length - 2)));
     break;
+  case TOK_IDENT:
+    getVariable(compiler);
+    break;
   default:
     error(compiler, "Expected a constant value.");
   }
@@ -860,7 +892,8 @@ static void pattern(Compiler* compiler) {
 static void matchExprCase(Compiler* compiler) {
   pattern(compiler);
 
-  int offset = emitJump(compiler, OP_JUMP_IF_NOT_MATCH);
+  int skipThisCase = emitJump(compiler, OP_JUMP_IF_NOT_MATCH);
+
   if (!match(compiler, TOK_ASSIGN)) {
     error(compiler, "Expected '=' after pattern");
     return;
@@ -868,11 +901,22 @@ static void matchExprCase(Compiler* compiler) {
 
   // Compile the body, which only gets evaluated if the pattern above matched.
   expression(compiler);
+
   // If the expression was evaluated, its value is sitting on top of the stack
   // above the original match value, and should be the return value of the
-  // entire expression. Swap them so that this expressions value is returned.
+  // entire expression. Swap them so that this expression's value is returned.
   emitOp(compiler, OP_SWAP_STACK_TOP);
-  patchJump(compiler, offset);
+
+  int skipOtherCases = emitJump(compiler, OP_JUMP);
+  patchJump(compiler, skipThisCase);
+
+  // Compile the remaining match expression cases.
+  ignoreNewlines(compiler);
+  if (match(compiler, TOK_GUARD)) {
+    matchExprCase(compiler);
+  }
+
+  patchJump(compiler, skipOtherCases);
 }
 
 static void matchExpr(Compiler* compiler, bool canAssign) {
@@ -885,10 +929,9 @@ static void matchExpr(Compiler* compiler, bool canAssign) {
     return;
   }
 
-  do {
-    matchExprCase(compiler);
-    ignoreNewlines(compiler);
-  } while (match(compiler, TOK_GUARD));
+  matchExprCase(compiler);
+
+  consume(compiler, TOK_SEMICOLON, "Expected ';'");
 
   // Clean up the stack.
   emitOp(compiler, OP_POP);

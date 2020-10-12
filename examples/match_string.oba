@@ -1,11 +1,13 @@
 // Outputs:
 // the bird is a parrot
 {
-  let animal = "bird"
+  let animal = "fish"
   let kind = match animal
     | "bird" = "parrot"
     | "dog"  = "beagle"
-  
+    | "fish" = "salmon"
+    | "cat"  = "ragdoll"    
+    ;
   debug "the " + animal + " is a " + kind
 }
 

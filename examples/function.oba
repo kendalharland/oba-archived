@@ -1,2 +1,3 @@
-fn x = 20
-debug x:
+fn double x = 2 * x
+
+debug double(4)

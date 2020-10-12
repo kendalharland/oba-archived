@@ -1,4 +1,0 @@
-// Arithmetic error; No cases match so there is no return value.
-let x = 20
-debug 1 + match x | 10 = 1 | 11 = 2 | 15 = 4
-

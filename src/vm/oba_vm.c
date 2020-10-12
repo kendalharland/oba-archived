@@ -132,15 +132,8 @@ static bool call(ObaVM* vm, ObjFunction* function, int arity) {
   }
   vm->frame->function = function;
   vm->frame->ip = function->chunk.code;
-  vm->frame->slots = vm->stackTop;
+  vm->frame->slots = vm->stackTop - arity - 1;
   return true;
-}
-
-static void return_(ObaVM* vm) {
-  vm->frame->function = NULL;
-  vm->frame->ip = NULL;
-  vm->frame->slots = NULL;
-  vm->frame--;
 }
 
 static bool callValue(ObaVM* vm, Value value, int arity) {
@@ -190,6 +183,16 @@ static void push(ObaVM* vm, Value value) {
 static Value pop(ObaVM* vm) {
   vm->stackTop--;
   return *vm->stackTop;
+}
+
+static void return_(ObaVM* vm) {
+  Value value = pop(vm);
+  vm->stackTop = vm->frame->slots;
+  push(vm, value);
+  vm->frame->function = NULL;
+  vm->frame->ip = NULL;
+  vm->frame->slots = NULL;
+  vm->frame--;
 }
 
 static void concatenate(ObaVM* vm) {
@@ -303,6 +306,9 @@ do {                                                                           \
     case OP_FALSE:
       push(vm, OBA_BOOL(false));
       break;
+    case OP_JUMP:
+      vm->frame->ip += READ_SHORT();
+      break;
     case OP_JUMP_IF_FALSE: {
       if (!IS_BOOL(peek(vm, 1))) {
         runtimeError(vm, "Expected a boolean expression");
@@ -374,7 +380,8 @@ do {                                                                           \
       break;
     }
     case OP_CALL: {
-      if (!callValue(vm, pop(vm), 0)) {
+      uint8_t argCount = READ_BYTE();
+      if (!callValue(vm, peek(vm, argCount + 1), argCount)) {
         return OBA_RESULT_RUNTIME_ERROR;
       }
       break;
