@@ -1,0 +1,3 @@
+debug match "a" | "a" = "a" | "b" = "b" | "c" = "c";
+// Output:
+// "a"
