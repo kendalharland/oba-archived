@@ -18,6 +18,7 @@
 #define IS_OBJ(value) ((value).type == VAL_OBJ)
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
+#define IS_NATIVE(value) isObjType(value, OBJ_NATIVE)
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 // Macros for converting from Oba to C.
@@ -27,25 +28,18 @@
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
+#define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
 
 // An Oba object in heap memory.
 typedef enum {
   OBJ_STRING,
   OBJ_FUNCTION,
+  OBJ_NATIVE,
 } ObjType;
 
 typedef struct {
   ObjType type;
 } Obj;
-
-typedef struct {
-  Obj obj;
-  int length;
-  char* chars;
-  uint32_t hash;
-} ObjString;
-
-typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
 
 // A tagged-union representing Oba values.
 typedef enum {
@@ -70,6 +64,27 @@ typedef struct {
   Value* values;
 } ValueArray;
 
+typedef struct {
+  Obj obj;
+  int length;
+  char* chars;
+  uint32_t hash;
+} ObjString;
+
+typedef Value (*NativeFn)(int argc, Value* argv);
+
+struct Builtin {
+  const char* name;
+  NativeFn function;
+};
+
+typedef struct {
+  Obj obj;
+  NativeFn function;
+} ObjNative;
+
+typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
 }
@@ -90,5 +105,6 @@ Obj* allocateObject(size_t size, ObjType type);
 ObjString* allocateString(char* chars, int length, uint32_t hash);
 ObjString* takeString(char* chars, int length);
 bool valuesEqual(Value a, Value b);
+ObjNative* newNative(NativeFn);
 
 #endif

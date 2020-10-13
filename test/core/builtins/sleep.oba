@@ -1,0 +1,2 @@
+// expect: 0
+debug sleep(1)

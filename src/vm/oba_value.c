@@ -46,6 +46,12 @@ ObjString* allocateString(char* chars, int length, uint32_t hash) {
   return string;
 }
 
+ObjNative* newNative(NativeFn function) {
+  ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+  native->function = function;
+  return native;
+}
+
 static uint32_t hashString(const char* key, int length) {
   uint32_t hash = 2166136261u;
 
@@ -71,6 +77,12 @@ ObjString* takeString(char* chars, int length) {
   return allocateString(chars, length, hash);
 }
 
+void freeObject(Obj obj) {
+  // TODO(kjharland): Implement
+  // TODO(kendal): Free string.
+  // TODO(kendal): Free native.
+}
+
 bool objectsEqual(Value ao, Value bo) {
   if (OBJ_TYPE(ao) != OBJ_TYPE(bo))
     return false;
@@ -80,6 +92,18 @@ bool objectsEqual(Value ao, Value bo) {
     ObjString* a = AS_STRING(ao);
     ObjString* b = AS_STRING(bo);
     return a->length == b->length && strcmp(a->chars, b->chars) == 0;
+  }
+  case OBJ_FUNCTION: {
+    // TODO(kendal): Test this.
+    ObjFunction* a = AS_FUNCTION(ao);
+    ObjFunction* b = AS_FUNCTION(bo);
+    return a == b;
+  }
+  case OBJ_NATIVE: {
+    // TODO(kendal): Test this.
+    NativeFn a = AS_NATIVE(ao);
+    NativeFn b = AS_NATIVE(bo);
+    return a == b;
   }
   default:
     return false; // Unreachable.
@@ -110,6 +134,9 @@ void printObject(Value value) {
     break;
   case OBJ_FUNCTION:
     printf("%s", AS_FUNCTION(value)->name);
+    break;
+  case OBJ_NATIVE:
+    printf("<native fn>");
     break;
   }
 }

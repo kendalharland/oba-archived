@@ -39,7 +39,7 @@ static void repl(void) {
   // Print banner.
   printf("oba %s\n", OBA_VERSION_STRING);
   printf("Press ctrl+d to exit\n");
-  ObaVM* vm = obaNewVM();
+  ObaVM* vm = obaNewVM(NULL, 0);
 
   do {
     printf(PROMPT);
@@ -82,7 +82,7 @@ static char* readFile(const char* filename) {
 
 static void runFile(const char* filename) {
   char* source = readFile(filename);
-  ObaVM* vm = obaNewVM();
+  ObaVM* vm = obaNewVM(NULL, 0);
   ObaInterpretResult result = interpret(vm, source);
   free(source);
   obaFreeVM(vm);

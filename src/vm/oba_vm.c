@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "oba.h"
+#include "oba_builtins.h"
 #include "oba_function.h"
 #include "oba_memory.h"
 #include "oba_vm.h"
@@ -105,8 +106,45 @@ static bool tableSet(Table* table, ObjString* key, Value value) {
 
 // VM -------------------------------------------------------------------------
 
+static Value peek(ObaVM* vm, int lookahead) {
+  return *(vm->stackTop - lookahead);
+}
+
+static void push(ObaVM* vm, Value value) {
+  *vm->stackTop = value;
+  vm->stackTop++;
+}
+
+static Value pop(ObaVM* vm) {
+  vm->stackTop--;
+  return *vm->stackTop;
+}
+
+static void defineNative(ObaVM* vm, const char* name, NativeFn function) {
+  push(vm, OBJ_VAL(copyString(name, (int)strlen(name))));
+  push(vm, OBJ_VAL(newNative(function)));
+  tableSet(vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+  pop(vm);
+  pop(vm);
+}
+
 static void resetStack(ObaVM* vm) { vm->stackTop = vm->stack; }
 static void resetFrames(ObaVM* vm) { vm->frame = vm->frames; }
+
+static void registerBuiltins(ObaVM* vm, Builtin* builtins, int builtinsLength) {
+  Builtin* builtin = __builtins__;
+
+  // Original builtins.
+  while (builtin->name != NULL) {
+    defineNative(vm, builtin->name, builtin->function);
+    builtin++;
+  }
+
+  // User builtins, registered last so they can override the originals.
+  for (int i = 0; i < builtinsLength; i++) {
+    defineNative(vm, builtins[i].name, builtins[i].function);
+  }
+}
 
 static void runtimeError(ObaVM* vm, const char* format, ...) {
   va_list args;
@@ -143,11 +181,20 @@ static bool call(ObaVM* vm, ObjFunction* function, int arity) {
   return true;
 }
 
+static bool callNative(ObaVM* vm, NativeFn native, int arity) {
+  Value result = native(arity, vm->stackTop - arity);
+  vm->stackTop -= arity;
+  push(vm, result);
+  return true;
+}
+
 static bool callValue(ObaVM* vm, Value value, int arity) {
   if (IS_OBJ(value)) {
     switch (OBJ_TYPE(value)) {
     case OBJ_FUNCTION:
       return call(vm, AS_FUNCTION(value), arity);
+    case OBJ_NATIVE:
+      return callNative(vm, AS_NATIVE(value), arity);
     default:
       // Non-callable
       break;
@@ -158,8 +205,7 @@ static bool callValue(ObaVM* vm, Value value, int arity) {
   return false;
 }
 
-ObaVM* obaNewVM() {
-  // TODO(kendal): sizeof(ObaVM) here instead?
+ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
   memset(vm, 0, sizeof(ObaVM));
 
@@ -167,31 +213,19 @@ ObaVM* obaNewVM() {
   initTable(vm->globals);
   resetStack(vm);
   resetFrames(vm);
+
+  registerBuiltins(vm, builtins, builtinsLength);
   return vm;
 }
 
 void obaFreeVM(ObaVM* vm) {
-  if (vm->frame->function != NULL) {
+  if (vm->frame != NULL && vm->frame->function != NULL) {
     freeChunk(&vm->frame->function->chunk);
   }
   freeTable(vm->globals);
   vm->stackTop = NULL;
   free(vm);
   vm = NULL;
-}
-
-static Value peek(ObaVM* vm, int lookahead) {
-  return *(vm->stackTop - lookahead);
-}
-
-static void push(ObaVM* vm, Value value) {
-  *vm->stackTop = value;
-  vm->stackTop++;
-}
-
-static Value pop(ObaVM* vm) {
-  vm->stackTop--;
-  return *vm->stackTop;
 }
 
 static void return_(ObaVM* vm) {

@@ -11,11 +11,14 @@ typedef enum {
   OBA_RESULT_RUNTIME_ERROR
 } ObaInterpretResult;
 
+// Builtin represents a named C function that is callable from Oba source code.
+typedef struct Builtin Builtin;
+
 // A single virtual machine for execute Oba code.
 typedef struct ObaVM ObaVM;
 
 // Creates a new Oba Virtual Machine.
-ObaVM* obaNewVM();
+ObaVM* obaNewVM(Builtin*, int);
 
 // Disposes of all resources in use by the vm, which was previously created by
 // a call to [obaVM].
