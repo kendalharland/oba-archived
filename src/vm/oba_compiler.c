@@ -758,7 +758,9 @@ static void whileStmt(Compiler* compiler) {
 }
 
 static void statement(Compiler* compiler) {
-  if (match(compiler, TOK_DEBUG)) {
+  if (match(compiler, TOK_LET)) {
+    assignStmt(compiler);
+  } else if (match(compiler, TOK_DEBUG)) {
     debugStmt(compiler);
   } else if (match(compiler, TOK_LBRACK)) {
     blockStmt(compiler);
@@ -771,7 +773,7 @@ static void statement(Compiler* compiler) {
   }
 }
 
-static void functionBody(Compiler* compiler) { expression(compiler); }
+static void functionBody(Compiler* compiler) { declaration(compiler); }
 
 static void parameterList(Compiler* compiler) {
   while (!match(compiler, TOK_ASSIGN)) {
@@ -808,10 +810,7 @@ static void functionDefinition(Compiler* compiler) {
 }
 
 static void declaration(Compiler* compiler) {
-  // TODO(kendal): Move this to statement.
-  if (match(compiler, TOK_LET)) {
-    assignStmt(compiler);
-  } else if (match(compiler, TOK_FN)) {
+  if (match(compiler, TOK_FN)) {
     functionDefinition(compiler);
   } else {
     statement(compiler);
