@@ -15,3 +15,13 @@ void freeFunction(ObjFunction* function) {
   freeChunk(&function->chunk);
   reallocate(function, sizeof(ObjFunction), 0);
 }
+
+ObjClosure* newClosure(ObjFunction* function) {
+  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+  closure->function = function;
+  return closure;
+}
+
+void freeClosure(ObjClosure* closure) {
+  reallocate(closure, sizeof(ObjClosure), 0);
+}

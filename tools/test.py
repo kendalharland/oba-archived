@@ -90,6 +90,11 @@ def run_test(oba, test_file):
     return verify_expectations(expected_errs, stderr.splitlines(), "stderr")
 
 
+PASSED = 0
+FAILED = 1
+FATAL = 2
+
+
 def run_test_file(oba, test_file):
     test_name = os.path.relpath(test_file, TEST_DIR)
 
@@ -98,20 +103,25 @@ def run_test_file(oba, test_file):
     except TestError as e:
         print("- FATAL ERROR: ", test_name)
         print("  {}".format(e))
-        return
+        return FAILED
 
     if not errors:
         print("- PASS " + test_name)
-        return
+        return PASSED
 
     print("- FAIL " + test_name)
     for error in errors:
         print("  - ERROR: " + error)
+    return FAILED
 
 
 def run_test_files(oba, filepaths):
+    exit_code = PASSED
     for filepath in filepaths:
-        run_test_file(oba, filepath)
+        result = run_test_file(oba, filepath)
+        if result:
+            exit_code = result
+    return exit_code
 
 
 def main():
@@ -119,7 +129,7 @@ def main():
 
     test_file_glob = os.path.join(TEST_DIR, args.glob)
     test_files = glob.glob(test_file_glob, recursive=True)
-    run_test_files(args.oba, test_files)
+    exit(run_test_files(args.oba, test_files))
 
 
 main()

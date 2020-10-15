@@ -1,0 +1,7 @@
+fn make_closure value = {
+  fn print_value = debug value
+  print_value 
+}
+
+let closure = make_closure("oba")
+closure() // expect: oba

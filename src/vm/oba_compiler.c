@@ -805,7 +805,8 @@ static void functionDefinition(Compiler* compiler) {
   functionBody(&fnCompiler);
   ObjFunction* fn = endCompiler(&fnCompiler, name.start, name.length);
 
-  emitConstant(compiler, OBJ_VAL(fn));
+  emitOp(compiler, OP_CLOSURE);
+  emitByte(compiler, addConstant(compiler, OBJ_VAL(fn)));
   defineVariable(compiler, declareVariable(compiler, name));
 }
 

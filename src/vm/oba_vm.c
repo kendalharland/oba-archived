@@ -156,17 +156,17 @@ static void runtimeError(ObaVM* vm, const char* format, ...) {
 
   // TODO(kendal): Capture op line info
   /*
-  size_t instruction = vm->frame->ip - vm->frame->function->chunk.code - 1;
-  int line = vm->frame->function->chunk.lines[instruction];
+  size_t instruction = vm->frame->ip - vm->frame->closure->function->chunk.code
+  - 1; int line = vm->frame->closure->function->chunk.lines[instruction];
   fprintf(stderr, "[line %d] in script\n", line);
   */
   resetStack(vm);
 }
 
-static bool call(ObaVM* vm, ObjFunction* function, int arity) {
-  if (arity != function->arity) {
-    runtimeError(vm, "Expected %d arguments but got %d", function->arity,
-                 arity);
+static bool call(ObaVM* vm, ObjClosure* closure, int arity) {
+  if (arity != closure->function->arity) {
+    runtimeError(vm, "Expected %d arguments but got %d",
+                 closure->function->arity, arity);
     return false;
   }
 
@@ -175,8 +175,8 @@ static bool call(ObaVM* vm, ObjFunction* function, int arity) {
     runtimeError(vm, "Too many nested function calls");
     return false;
   }
-  vm->frame->function = function;
-  vm->frame->ip = function->chunk.code;
+  vm->frame->closure = closure;
+  vm->frame->ip = closure->function->chunk.code;
   vm->frame->slots = vm->stackTop - arity;
   return true;
 }
@@ -191,8 +191,8 @@ static bool callNative(ObaVM* vm, NativeFn native, int arity) {
 static bool callValue(ObaVM* vm, Value value, int arity) {
   if (IS_OBJ(value)) {
     switch (OBJ_TYPE(value)) {
-    case OBJ_FUNCTION:
-      return call(vm, AS_FUNCTION(value), arity);
+    case OBJ_CLOSURE:
+      return call(vm, AS_CLOSURE(value), arity);
     case OBJ_NATIVE:
       return callNative(vm, AS_NATIVE(value), arity);
     default:
@@ -219,8 +219,8 @@ ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
 }
 
 void obaFreeVM(ObaVM* vm) {
-  if (vm->frame != NULL && vm->frame->function != NULL) {
-    freeChunk(&vm->frame->function->chunk);
+  if (vm->frame != NULL && vm->frame->closure->function != NULL) {
+    freeChunk(&vm->frame->closure->function->chunk);
   }
   freeTable(vm->globals);
   vm->stackTop = NULL;
@@ -233,7 +233,7 @@ static void return_(ObaVM* vm) {
   // -1 because the function itself is right before the slot pointer.
   vm->stackTop = vm->frame->slots - 1;
   push(vm, value);
-  vm->frame->function = NULL;
+  vm->frame->closure = NULL;
   vm->frame->ip = NULL;
   vm->frame->slots = NULL;
   vm->frame--;
@@ -261,7 +261,7 @@ static ObaInterpretResult run(ObaVM* vm) {
 #define READ_BYTE() (*vm->frame->ip++)
 #define READ_SHORT() \
   (vm->frame->ip += 2, (uint16_t)((vm->frame->ip[-2] << 8) | vm->frame->ip[-1]))
-#define READ_CONSTANT() (vm->frame->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT() (vm->frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
 #define BINARY_OP(type, op)                                                    \
@@ -283,8 +283,8 @@ do {                                                                           \
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     disassembleInstruction(
-        &vm->frame->function->chunk,
-        (int)(vm->frame->ip - vm->frame->function->chunk.code));
+        &vm->frame->closure->function->chunk,
+        (int)(vm->frame->ip - vm->frame->closure->function->chunk.code));
     printf("          ");
     for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
       printf("[ ");
@@ -391,7 +391,7 @@ do {                                                                           \
       break;
     }
     case OP_LOOP: {
-      vm->frame->ip = vm->frame->function->chunk.code + READ_SHORT();
+      vm->frame->ip = vm->frame->closure->function->chunk.code + READ_SHORT();
       break;
     }
     case OP_DEFINE_GLOBAL: {
@@ -428,6 +428,12 @@ do {                                                                           \
       }
       break;
     }
+    case OP_CLOSURE: {
+      ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+      ObjClosure* closure = newClosure(function);
+      push(vm, OBJ_VAL(closure));
+      break;
+    }
     case OP_RETURN:
       return_(vm);
       break;
@@ -447,23 +453,19 @@ do {                                                                           \
 #undef READ_BYTE
 }
 
-static ObaInterpretResult interpret(ObaVM* vm) {
-  if (vm->frame->function->chunk.code == NULL)
-    return OBA_RESULT_SUCCESS;
-
-  vm->frame->ip = vm->frame->function->chunk.code;
-  return run(vm);
-}
-
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
   ObjFunction* function = obaCompile(source);
   if (function == NULL) {
     return OBA_RESULT_COMPILE_ERROR;
   }
+  if (function->chunk.code == NULL) {
+    return OBA_RESULT_SUCCESS;
+  }
 
-  CallFrame* frame = &vm->frames[0];
-  frame->function = function;
-  frame->ip = function->chunk.code;
-  frame->slots = vm->stackTop;
-  return interpret(vm);
+  push(vm, OBJ_VAL(function));
+  ObjClosure* closure = newClosure(function);
+  pop(vm);
+  push(vm, OBJ_VAL(closure));
+  callValue(vm, OBJ_VAL(closure), 0);
+  return run(vm);
 }

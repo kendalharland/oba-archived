@@ -14,13 +14,23 @@ typedef struct {
   ObjString* name;
 } ObjFunction;
 
+// An instance of ObjFunction which captures the values in the function's
+// lexical scope at runtime.
 typedef struct {
+  Obj obj;
   ObjFunction* function;
+} ObjClosure;
+
+typedef struct {
+  ObjClosure* closure;
   uint8_t* ip;
   Value* slots;
 } CallFrame;
 
 ObjFunction* newFunction();
 void freeFunction(ObjFunction*);
+
+ObjClosure* newClosure();
+void freeClosure(ObjClosure*);
 
 #endif

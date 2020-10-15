@@ -78,15 +78,17 @@ ObjString* takeString(char* chars, int length) {
 }
 
 void freeObject(Obj obj) {
-  // TODO(kjharland): Implement
+  // TODO(kendal): Implement
   // TODO(kendal): Free string.
   // TODO(kendal): Free native.
+  // TODO(kendal): Free closure.
 }
 
 bool objectsEqual(Value ao, Value bo) {
   if (OBJ_TYPE(ao) != OBJ_TYPE(bo))
     return false;
 
+  // TODO(kendal): Closures.
   switch (OBJ_TYPE(ao)) {
   case OBJ_STRING: {
     ObjString* a = AS_STRING(ao);
@@ -126,14 +128,19 @@ bool valuesEqual(Value a, Value b) {
   }
 }
 
+void printFunction(ObjFunction* function) { printf("%s", function->name); }
+
 void printObject(Value value) {
   Obj* obj = AS_OBJ(value);
   switch (obj->type) {
-  case OBJ_STRING:
-    printf("%s", AS_CSTRING(value));
+  case OBJ_CLOSURE:
+    printFunction(AS_CLOSURE(value)->function);
     break;
   case OBJ_FUNCTION:
-    printf("%s", AS_FUNCTION(value)->name);
+    printFunction(AS_FUNCTION(value));
+    break;
+  case OBJ_STRING:
+    printf("%s", AS_CSTRING(value));
     break;
   case OBJ_NATIVE:
     printf("<native fn>");
