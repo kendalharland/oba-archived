@@ -145,6 +145,9 @@ void printObject(Value value) {
   case OBJ_NATIVE:
     printf("<native fn>");
     break;
+  case OBJ_UPVALUE:
+    printValue(*(AS_UPVALUE(value)->location));
+    break;
   }
 }
 

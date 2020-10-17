@@ -205,6 +205,11 @@ static bool callValue(ObaVM* vm, Value value, int arity) {
   return false;
 }
 
+static ObjUpvalue* captureUpvalue(ObaVM* vm, Value* local) {
+  ObjUpvalue* upvalue = newUpvalue(local);
+  return upvalue;
+}
+
 ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
   memset(vm, 0, sizeof(ObaVM));
@@ -421,6 +426,19 @@ do {                                                                           \
       push(vm, vm->frame->slots[slot]);
       break;
     }
+    case OP_SET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      *vm->frame->closure->upvalues[slot]->location = peek(vm, 1);
+      break;
+    }
+    case OP_GET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      ObjUpvalue* upvalue = vm->frame->closure->upvalues[slot];
+      // The user can never get an upvalue directly. Push its captured value
+      // onto the stack instead.
+      push(vm, *upvalue->location);
+      break;
+    }
     case OP_CALL: {
       uint8_t argCount = READ_BYTE();
       if (!callValue(vm, peek(vm, argCount + 1), argCount)) {
@@ -432,6 +450,16 @@ do {                                                                           \
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjClosure* closure = newClosure(function);
       push(vm, OBJ_VAL(closure));
+
+      for (int j = 0; j < closure->upvalueCount; j++) {
+        uint8_t isLocal = READ_BYTE();
+        uint8_t slot = READ_BYTE();
+        if (isLocal) {
+          closure->upvalues[j] = captureUpvalue(vm, vm->frame->slots + slot);
+        } else {
+          closure->upvalues[j] = vm->frame->closure->upvalues[slot];
+        }
+      }
       break;
     }
     case OP_RETURN:

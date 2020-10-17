@@ -31,6 +31,7 @@
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 #define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
+#define AS_UPVALUE(value) ((ObjUpvalue*)AS_OBJ(value))
 
 // An Oba object in heap memory.
 typedef enum {
@@ -38,6 +39,7 @@ typedef enum {
   OBJ_FUNCTION,
   OBJ_CLOSURE,
   OBJ_NATIVE,
+  OBJ_UPVALUE,
 } ObjType;
 
 typedef struct {

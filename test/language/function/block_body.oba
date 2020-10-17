@@ -1,0 +1,5 @@
+fn block {
+  debug "block"
+}
+
+block() // expect: block

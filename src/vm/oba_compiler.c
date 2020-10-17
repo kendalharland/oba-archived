@@ -13,6 +13,11 @@
 #include "oba_vm.h"
 
 typedef struct {
+  uint8_t index;
+  bool isLocal;
+} Upvalue;
+
+typedef struct {
   ObaVM* vm;
   Token current;
   Token previous;
@@ -39,6 +44,7 @@ struct sCompiler {
   FunctionType type;
 
   Local locals[MAX_LOCALS];
+  Upvalue upvalues[UINT8_MAX];
   int localCount;
   int currentDepth;
   Parser* parser;
@@ -195,12 +201,25 @@ static void setLocal(Compiler* compiler, int slot) {
   emitByte(compiler, slot);
 }
 
+static void setUpvalue(Compiler* compiler, int slot) {
+  // The upvalue's value is already at the top of the stack.
+  emitOp(compiler, OP_SET_UPVALUE);
+  emitByte(compiler, slot);
+}
+
 // Declares a new local in an uninitialized state.
 // Any attempt to use the local before it is initialized is an error.
 static void addLocal(Compiler* compiler, Token name) {
   Local* local = &compiler->locals[compiler->localCount++];
   local->token = name;
   local->depth = -1;
+}
+
+static int addUpvalue(Compiler* compiler, int slot, bool isLocal) {
+  int upvalueCount = compiler->function->upvalueCount;
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = slot;
+  return compiler->function->upvalueCount++;
 }
 
 static void markInitialized(Compiler* compiler) {
@@ -273,6 +292,11 @@ static void getLocal(Compiler* compiler, int slot) {
   emitByte(compiler, (uint8_t)slot);
 }
 
+static void getUpvalue(Compiler* compiler, int slot) {
+  emitOp(compiler, OP_GET_UPVALUE);
+  emitByte(compiler, (uint8_t)slot);
+}
+
 // Finds a local variable named [name] in the current scope.
 // Returns a negative number if it is not found.
 static int lookupLocal(Compiler* compiler, Token name) {
@@ -288,26 +312,62 @@ static int lookupLocal(Compiler* compiler, Token name) {
   return -1;
 }
 
+// Resolves an upvalue from the enclosing function scope.
+//
+// If this is the first time the upvalue is being resolved, and it is found in
+// an outer scope of the enclosing scope, it is recursively registered as an
+// upvalue in each enclosing scope to optimize future resolution.
+static int resolveUpvalue(Compiler* compiler, Token name) {
+  // There are no upvalues if this is the root function scope.
+  if (compiler->parent == NULL)
+    return -1;
+
+  int local = lookupLocal(compiler->parent, name);
+  if (local >= 0) {
+    return addUpvalue(compiler, local, true);
+  }
+
+  int upvalue = resolveUpvalue(compiler->parent, name);
+  if (upvalue >= 0) {
+    return addUpvalue(compiler, upvalue, false);
+  }
+
+  return -1;
+}
+
+// TODO(kendal): Combine get/set into a single function.
+
 static void getVariable(Compiler* compiler) {
   Token name = compiler->parser->previous;
   int local = lookupLocal(compiler, name);
   if (local >= 0) {
     getLocal(compiler, local);
-  } else {
-    Value value = OBJ_VAL(copyString(name.start, name.length));
-    getGlobal(compiler, value);
+    return;
   }
+
+  int upvalue = resolveUpvalue(compiler, name);
+  if (upvalue >= 0) {
+    getUpvalue(compiler, upvalue);
+    return;
+  }
+
+  Value value = OBJ_VAL(copyString(name.start, name.length));
+  getGlobal(compiler, value);
 }
 
 static void setVariable(Compiler* compiler, Token name) {
   int local = lookupLocal(compiler, name);
   if (local >= 0) {
     setLocal(compiler, local);
-    // The local already has a slot, so we don't need to keep the new value on
-    // the stack.
-    emitOp(compiler, OP_POP);
     return;
   }
+
+  int upvalue = resolveUpvalue(compiler, name);
+  if (upvalue >= 0) {
+    setUpvalue(compiler, upvalue);
+    return;
+  }
+
   // Globals are constant.
   // TODO(kendal): Lookup the global so that we can print whether it's defined
   // at all.
@@ -773,14 +833,32 @@ static void statement(Compiler* compiler) {
   }
 }
 
-static void functionBody(Compiler* compiler) { declaration(compiler); }
+static void functionBlockBody(Compiler* compiler) {
+  consume(compiler, TOK_LBRACK, "Expected '{' before function body");
+  ignoreNewlines(compiler);
+
+  while (!match(compiler, TOK_RBRACK)) {
+    declaration(compiler);
+    ignoreNewlines(compiler);
+  }
+}
+
+static void functionBody(Compiler* compiler) {
+  if (peek(compiler) == TOK_LBRACK) {
+    functionBlockBody(compiler);
+    return;
+  }
+
+  if (match(compiler, TOK_ASSIGN)) {
+    expression(compiler);
+    return;
+  }
+
+  error(compiler, "Missing function body");
+}
 
 static void parameterList(Compiler* compiler) {
-  while (!match(compiler, TOK_ASSIGN)) {
-    if (!match(compiler, TOK_IDENT)) {
-      error(compiler, "Expected parameter name");
-      return;
-    }
+  while (match(compiler, TOK_IDENT)) {
     int local = declareVariable(compiler, compiler->parser->previous);
     defineVariable(compiler, local);
     compiler->function->arity++;
@@ -803,10 +881,18 @@ static void functionDefinition(Compiler* compiler) {
   parameterList(&fnCompiler);
   ignoreNewlines(&fnCompiler);
   functionBody(&fnCompiler);
+
   ObjFunction* fn = endCompiler(&fnCompiler, name.start, name.length);
+  if (fn == NULL)
+    return;
 
   emitOp(compiler, OP_CLOSURE);
   emitByte(compiler, addConstant(compiler, OBJ_VAL(fn)));
+
+  for (int i = 0; i < fn->upvalueCount; i++) {
+    emitByte(compiler, fnCompiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler, fnCompiler.upvalues[i].index);
+  }
   defineVariable(compiler, declareVariable(compiler, name));
 }
 

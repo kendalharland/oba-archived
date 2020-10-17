@@ -9,9 +9,15 @@
 
 typedef struct {
   Obj obj;
+  Value* location;
+} ObjUpvalue;
+
+typedef struct {
+  Obj obj;
   Chunk chunk;
   int arity;
   ObjString* name;
+  int upvalueCount;
 } ObjFunction;
 
 // An instance of ObjFunction which captures the values in the function's
@@ -19,6 +25,8 @@ typedef struct {
 typedef struct {
   Obj obj;
   ObjFunction* function;
+  ObjUpvalue** upvalues;
+  int upvalueCount;
 } ObjClosure;
 
 typedef struct {
@@ -32,5 +40,8 @@ void freeFunction(ObjFunction*);
 
 ObjClosure* newClosure();
 void freeClosure(ObjClosure*);
+
+ObjUpvalue* newUpvalue(Value*);
+void freeUpvalue(ObjUpvalue*);
 
 #endif
