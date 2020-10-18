@@ -1,0 +1,21 @@
+fn make_closure val {
+  let outer_val = "outer"
+  fn middle {
+    let middle_val = "middle"
+    fn inner {
+      debug val
+      debug outer_val
+      debug middle_val 
+    }
+    inner
+  }
+  middle
+}
+
+let middle = make_closure("arg")
+let inner = middle()
+inner()
+// expect: arg
+// expect: outer
+// expect: middle
+ 

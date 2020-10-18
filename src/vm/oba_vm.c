@@ -129,7 +129,6 @@ static void defineNative(ObaVM* vm, const char* name, NativeFn function) {
 }
 
 static void resetStack(ObaVM* vm) { vm->stackTop = vm->stack; }
-static void resetFrames(ObaVM* vm) { vm->frame = vm->frames; }
 
 static void registerBuiltins(ObaVM* vm, Builtin* builtins, int builtinsLength) {
   Builtin* builtin = __builtins__;
@@ -205,19 +204,51 @@ static bool callValue(ObaVM* vm, Value value, int arity) {
   return false;
 }
 
+// Captures the local value in an upvalue.
+// If an existing upvalue already closes over the local, it is returned.
+// Otherwise a new one is created.
 static ObjUpvalue* captureUpvalue(ObaVM* vm, Value* local) {
-  ObjUpvalue* upvalue = newUpvalue(local);
-  return upvalue;
+  ObjUpvalue* prev = NULL;
+  ObjUpvalue* upvalue = vm->openUpvalues;
+
+  while (upvalue != NULL && upvalue->location > local) {
+    prev = upvalue;
+    upvalue = upvalue->next;
+  }
+
+  if (upvalue != NULL && upvalue->location == local) {
+    return upvalue;
+  }
+
+  ObjUpvalue* createdUpvalue = newUpvalue(local);
+  createdUpvalue->next = upvalue;
+
+  if (prev == NULL) {
+    vm->openUpvalues = createdUpvalue;
+  } else {
+    prev->next = createdUpvalue;
+  }
+
+  return createdUpvalue;
+}
+
+static void closeUpvalue(ObaVM* vm, Value* last) {
+  while (vm->openUpvalues != NULL && vm->openUpvalues->location >= last) {
+    vm->openUpvalues->closed = *vm->openUpvalues->location;
+    vm->openUpvalues->location = &vm->openUpvalues->closed;
+    vm->openUpvalues = vm->openUpvalues->next;
+  }
 }
 
 ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
   ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
   memset(vm, 0, sizeof(ObaVM));
 
+  vm->openUpvalues = NULL;
   vm->globals = (Table*)realloc(NULL, sizeof(Table));
   initTable(vm->globals);
   resetStack(vm);
-  resetFrames(vm);
+  vm->frame = vm->frames;
 
   registerBuiltins(vm, builtins, builtinsLength);
   return vm;
@@ -235,6 +266,8 @@ void obaFreeVM(ObaVM* vm) {
 
 static void return_(ObaVM* vm) {
   Value value = pop(vm);
+  closeUpvalue(vm, vm->frame->slots);
+
   // -1 because the function itself is right before the slot pointer.
   vm->stackTop = vm->frame->slots - 1;
   push(vm, value);
@@ -439,6 +472,10 @@ do {                                                                           \
       push(vm, *upvalue->location);
       break;
     }
+    case OP_CLOSE_UPVALUE:
+      closeUpvalue(vm, vm->stackTop - 1);
+      pop(vm);
+      break;
     case OP_CALL: {
       uint8_t argCount = READ_BYTE();
       if (!callValue(vm, peek(vm, argCount + 1), argCount)) {

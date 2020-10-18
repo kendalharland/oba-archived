@@ -7,9 +7,17 @@
 #include "oba_opcodes.h"
 #include "oba_value.h"
 
-typedef struct {
+typedef struct ObjUpvalue {
   Obj obj;
+
+  // A pointer to the stack location of the local captured by this upvalue.
   Value* location;
+
+  // The value of the local captured by this upvalue.
+  // This is uninitialized until the upvalue is closed.
+  Value closed;
+
+  struct ObjUpvalue* next;
 } ObjUpvalue;
 
 typedef struct {

@@ -36,6 +36,9 @@ typedef struct {
 typedef struct {
   Token token;
   int depth;
+
+  // Whether this local is captured by an upvalue.
+  bool isCaptured;
 } Local;
 
 struct sCompiler {
@@ -213,6 +216,7 @@ static void addLocal(Compiler* compiler, Token name) {
   Local* local = &compiler->locals[compiler->localCount++];
   local->token = name;
   local->depth = -1;
+  local->isCaptured = false;
 }
 
 static int addUpvalue(Compiler* compiler, int slot, bool isLocal) {
@@ -324,6 +328,7 @@ static int resolveUpvalue(Compiler* compiler, Token name) {
 
   int local = lookupLocal(compiler->parent, name);
   if (local >= 0) {
+    compiler->parent->locals[local].isCaptured = true;
     return addUpvalue(compiler, local, true);
   }
 
@@ -755,7 +760,11 @@ static void exitScope(Compiler* compiler) {
     Local local = compiler->locals[i];
     if (local.depth > compiler->currentDepth) {
       compiler->localCount--;
-      emitOp(compiler, OP_POP);
+      if (local.isCaptured) {
+        emitOp(compiler, OP_CLOSE_UPVALUE);
+      } else {
+        emitOp(compiler, OP_POP);
+      }
     } else {
       break;
     }
