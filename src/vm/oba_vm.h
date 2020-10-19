@@ -5,6 +5,7 @@
 #include "oba_function.h"
 #include "oba_opcodes.h"
 #include "oba_token.h"
+#include "oba_value.h"
 
 // The maximum size of the VM stack in bytes.
 // TODO(kendal): Support dynamically resizing the stack.
@@ -24,6 +25,8 @@ struct ObaVM {
   Value* stackTop;
   Table* globals;
   ObjUpvalue* openUpvalues;
+
+  Obj* objects;
 };
 
 #endif

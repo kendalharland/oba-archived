@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "oba.h"
+
 // Helper macros for coverting to and from Oba values -------------------------
 
 // Macros for converting from C to Oba.
@@ -42,8 +44,9 @@ typedef enum {
   OBJ_UPVALUE,
 } ObjType;
 
-typedef struct {
+typedef struct Obj {
   ObjType type;
+  struct Obj* next;
 } Obj;
 
 // A tagged-union representing Oba values.
@@ -105,11 +108,12 @@ void writeValueArray(ValueArray*, Value);
 
 void printValue(Value value);
 
-ObjString* copyString(const char* chars, int length);
-Obj* allocateObject(size_t size, ObjType type);
-ObjString* allocateString(char* chars, int length, uint32_t hash);
-ObjString* takeString(char* chars, int length);
+ObjString* copyString(ObaVM* vm, const char* chars, int length);
+Obj* allocateObject(ObaVM* vm, size_t size, ObjType type);
+ObjString* allocateString(ObaVM* vm, char* chars, int length, uint32_t hash);
+ObjString* takeString(ObaVM* vm, char* chars, int length);
 bool valuesEqual(Value a, Value b);
-ObjNative* newNative(NativeFn);
+ObjNative* newNative(ObaVM*, NativeFn);
 
+void freeObject(Obj*);
 #endif

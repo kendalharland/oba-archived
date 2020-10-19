@@ -121,8 +121,8 @@ static Value pop(ObaVM* vm) {
 }
 
 static void defineNative(ObaVM* vm, const char* name, NativeFn function) {
-  push(vm, OBJ_VAL(copyString(name, (int)strlen(name))));
-  push(vm, OBJ_VAL(newNative(function)));
+  push(vm, OBJ_VAL(copyString(vm, name, (int)strlen(name))));
+  push(vm, OBJ_VAL(newNative(vm, function)));
   tableSet(vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
   pop(vm);
   pop(vm);
@@ -220,7 +220,7 @@ static ObjUpvalue* captureUpvalue(ObaVM* vm, Value* local) {
     return upvalue;
   }
 
-  ObjUpvalue* createdUpvalue = newUpvalue(local);
+  ObjUpvalue* createdUpvalue = newUpvalue(vm, local);
   createdUpvalue->next = upvalue;
 
   if (prev == NULL) {
@@ -245,6 +245,7 @@ ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
   memset(vm, 0, sizeof(ObaVM));
 
   vm->openUpvalues = NULL;
+  vm->objects = NULL;
   vm->globals = (Table*)realloc(NULL, sizeof(Table));
   initTable(vm->globals);
   resetStack(vm);
@@ -254,12 +255,23 @@ ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
   return vm;
 }
 
+static void freeObjects(ObaVM* vm) {
+  Obj* obj = vm->objects;
+  while (obj != NULL) {
+    Obj* next = obj->next;
+    freeObject(obj);
+    obj = next;
+  }
+  vm->objects = NULL;
+}
+
 void obaFreeVM(ObaVM* vm) {
   if (vm->frame != NULL && vm->frame->closure->function != NULL) {
     freeChunk(&vm->frame->closure->function->chunk);
   }
-  freeTable(vm->globals);
   vm->stackTop = NULL;
+  freeTable(vm->globals);
+  freeObjects(vm);
   free(vm);
   vm = NULL;
 }
@@ -288,7 +300,7 @@ static void concatenate(ObaVM* vm) {
   memcpy(chars + a->length, b->chars, b->length);
   chars[length] = '\0';
 
-  ObjString* result = takeString(chars, length);
+  ObjString* result = takeString(vm, chars, length);
   push(vm, OBJ_VAL(result));
 }
 
@@ -485,7 +497,7 @@ do {                                                                           \
     }
     case OP_CLOSURE: {
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
-      ObjClosure* closure = newClosure(function);
+      ObjClosure* closure = newClosure(vm, function);
       push(vm, OBJ_VAL(closure));
 
       for (int j = 0; j < closure->upvalueCount; j++) {
@@ -519,7 +531,7 @@ do {                                                                           \
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-  ObjFunction* function = obaCompile(source);
+  ObjFunction* function = obaCompile(vm, source);
   if (function == NULL) {
     return OBA_RESULT_COMPILE_ERROR;
   }
@@ -528,7 +540,7 @@ ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
   }
 
   push(vm, OBJ_VAL(function));
-  ObjClosure* closure = newClosure(function);
+  ObjClosure* closure = newClosure(vm, function);
   pop(vm);
   push(vm, OBJ_VAL(closure));
   callValue(vm, OBJ_VAL(closure), 0);

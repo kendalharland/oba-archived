@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "oba.h"
 #include "oba_opcodes.h"
 #include "oba_value.h"
 
@@ -43,13 +44,13 @@ typedef struct {
   Value* slots;
 } CallFrame;
 
-ObjFunction* newFunction();
+ObjFunction* newFunction(ObaVM*);
 void freeFunction(ObjFunction*);
 
-ObjClosure* newClosure();
+ObjClosure* newClosure(ObaVM*, ObjFunction*);
 void freeClosure(ObjClosure*);
 
-ObjUpvalue* newUpvalue(Value*);
+ObjUpvalue* newUpvalue(ObaVM*, Value*);
 void freeUpvalue(ObjUpvalue*);
 
 #endif

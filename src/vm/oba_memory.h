@@ -14,8 +14,10 @@
 
 #define ALLOCATE(type, count) (type*)reallocate(NULL, 0, sizeof(type) * (count))
 
-#define ALLOCATE_OBJ(type, objectType)                                         \
-  (type*)allocateObject(sizeof(type), objectType)
+#define ALLOCATE_OBJ(vm, type, objectType)                                     \
+  (type*)allocateObject(vm, sizeof(type), objectType)
+
+#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0)
 
 // Reallocates [pointer] from [oldSize] to [newSize].
 // If [newSize] is 0, [pointer] is freed.

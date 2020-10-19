@@ -51,14 +51,19 @@ struct sCompiler {
   int localCount;
   int currentDepth;
   Parser* parser;
+
+  // A pointer to the VM, used to store objects allocated during compilation.
+  ObaVM* vm;
 };
 
-void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent) {
+void initCompiler(ObaVM* vm, Compiler* compiler, Parser* parser,
+                  Compiler* parent) {
+  compiler->vm = vm;
   compiler->parent = parent;
   compiler->parser = parser;
   compiler->localCount = 0;
   compiler->currentDepth = 0;
-  compiler->function = newFunction();
+  compiler->function = newFunction(vm);
   compiler->type = TYPE_SCRIPT;
 }
 
@@ -149,7 +154,7 @@ static void emitError(Compiler* compiler, const char* format, ...) {
   int length = vsprintf(message, format, args);
   // TODO(kendal): Ensure length < 1024
 
-  Value error = OBJ_VAL(copyString(message, length));
+  Value error = OBJ_VAL(copyString(compiler->vm, message, length));
   emitOp(compiler, OP_ERROR);
   emitByte(compiler, addConstant(compiler, error));
 }
@@ -245,8 +250,8 @@ static bool identifiersMatch(Token a, Token b) {
 
 static int declareVariable(Compiler* compiler, Token name) {
   if (compiler->currentDepth == 0) {
-    return declareGlobal(compiler,
-                         OBJ_VAL(copyString(name.start, name.length)));
+    return declareGlobal(
+        compiler, OBJ_VAL(copyString(compiler->vm, name.start, name.length)));
   }
 
   int slot = compiler->localCount;
@@ -356,7 +361,7 @@ static void getVariable(Compiler* compiler) {
     return;
   }
 
-  Value value = OBJ_VAL(copyString(name.start, name.length));
+  Value value = OBJ_VAL(copyString(compiler->vm, name.start, name.length));
   getGlobal(compiler, value);
 }
 
@@ -882,7 +887,7 @@ static void functionDefinition(Compiler* compiler) {
   }
 
   Compiler fnCompiler;
-  initCompiler(&fnCompiler, compiler->parser, compiler);
+  initCompiler(compiler->vm, &fnCompiler, compiler->parser, compiler);
 
   Token name = compiler->parser->previous;
 
@@ -921,9 +926,9 @@ static void grouping(Compiler* compiler, bool canAssign) {
 
 static void string(Compiler* compiler, bool canAssign) {
   // +1 and -2 to omit the leading and traling '"'.
-  emitConstant(compiler,
-               OBJ_VAL(copyString(compiler->parser->previous.start + 1,
-                                  compiler->parser->previous.length - 2)));
+  emitConstant(compiler, OBJ_VAL(copyString(
+                             compiler->vm, compiler->parser->previous.start + 1,
+                             compiler->parser->previous.length - 2)));
 }
 
 static void assignment(Compiler* compiler, bool canAssign) {
@@ -993,8 +998,8 @@ static void pattern(Compiler* compiler) {
     emitConstant(compiler, token.value);
     break;
   case TOK_STRING:
-    emitConstant(compiler,
-                 OBJ_VAL(copyString(token.start + 1, token.length - 2)));
+    emitConstant(compiler, OBJ_VAL(copyString(compiler->vm, token.start + 1,
+                                              token.length - 2)));
     break;
   case TOK_IDENT:
     getVariable(compiler);
@@ -1143,7 +1148,8 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
     // TODO(kendal): Consider just keeping a stack of compilers on the VM,
     // which would also prevent us from having to fixup the VM's ip and frame
     // before executing the compiled code.
-    compiler->function->name = copyString(debugName, debugNameLength);
+    compiler->function->name =
+        copyString(compiler->vm, debugName, debugNameLength);
     compiler->parent->parser = compiler->parser;
 
     emitOp(compiler, OP_RETURN);
@@ -1152,8 +1158,8 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
   return compiler->function;
 }
 
-ObjFunction* compile(const char* source, Compiler* parent, const char* name,
-                     int nameLength, bool isFunction) {
+ObjFunction* compile(ObaVM* vm, const char* source, Compiler* parent,
+                     const char* name, int nameLength, bool isFunction) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
     source += 3;
@@ -1170,7 +1176,7 @@ ObjFunction* compile(const char* source, Compiler* parent, const char* name,
   parser.hasError = false;
 
   Compiler compiler;
-  initCompiler(&compiler, &parser, parent);
+  initCompiler(vm, &compiler, &parser, parent);
 
   nextToken(&compiler);
   ignoreNewlines(&compiler);
@@ -1192,6 +1198,6 @@ ObjFunction* compile(const char* source, Compiler* parent, const char* name,
   return endCompiler(&compiler, name, nameLength);
 }
 
-ObjFunction* obaCompile(const char* source) {
-  return compile(source, NULL, "(script)", 8, false);
+ObjFunction* obaCompile(ObaVM* vm, const char* source) {
+  return compile(vm, source, NULL, "(script)", 8, false);
 }

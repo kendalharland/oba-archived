@@ -2,8 +2,8 @@
 #include "oba_memory.h"
 #include "oba_value.h"
 
-ObjFunction* newFunction() {
-  ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+ObjFunction* newFunction(ObaVM* vm) {
+  ObjFunction* function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
   initChunk(&function->chunk);
   function->arity = 0;
   function->name = NULL;
@@ -17,8 +17,8 @@ void freeFunction(ObjFunction* function) {
   reallocate(function, sizeof(ObjFunction), 0);
 }
 
-ObjClosure* newClosure(ObjFunction* function) {
-  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+ObjClosure* newClosure(ObaVM* vm, ObjFunction* function) {
+  ObjClosure* closure = ALLOCATE_OBJ(vm, ObjClosure, OBJ_CLOSURE);
   ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
   for (int i = 0; i < function->upvalueCount; i++) {
     upvalues[i] = NULL;
@@ -34,8 +34,8 @@ void freeClosure(ObjClosure* closure) {
   reallocate(closure, sizeof(ObjClosure), 0);
 }
 
-ObjUpvalue* newUpvalue(Value* slot) {
-  ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+ObjUpvalue* newUpvalue(ObaVM* vm, Value* slot) {
+  ObjUpvalue* upvalue = ALLOCATE_OBJ(vm, ObjUpvalue, OBJ_UPVALUE);
   upvalue->location = slot;
   upvalue->next = NULL;
   return upvalue;

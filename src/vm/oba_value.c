@@ -29,16 +29,19 @@ void writeValueArray(ValueArray* array, Value value) {
   array->count++;
 }
 
-Obj* allocateObject(size_t size, ObjType type) {
+Obj* allocateObject(ObaVM* vm, size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
+
+  object->next = vm->objects;
+  vm->objects = object;
   return object;
 }
 
 // FNV-1a hash function
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function.
-ObjString* allocateString(char* chars, int length, uint32_t hash) {
-  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+ObjString* allocateString(ObaVM* vm, char* chars, int length, uint32_t hash) {
+  ObjString* string = ALLOCATE_OBJ(vm, ObjString, OBJ_STRING);
   string->length = length;
   string->chars = chars;
   string->hash = hash;
@@ -46,8 +49,8 @@ ObjString* allocateString(char* chars, int length, uint32_t hash) {
   return string;
 }
 
-ObjNative* newNative(NativeFn function) {
-  ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+ObjNative* newNative(ObaVM* vm, NativeFn function) {
+  ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
   native->function = function;
   return native;
 }
@@ -63,25 +66,47 @@ static uint32_t hashString(const char* key, int length) {
   return hash;
 }
 
-ObjString* copyString(const char* chars, int length) {
+ObjString* copyString(ObaVM* vm, const char* chars, int length) {
   char* heapChars = ALLOCATE(char, length + 1);
   memcpy(heapChars, chars, length);
   heapChars[length] = '\0';
   uint32_t hash = hashString(heapChars, length);
 
-  return allocateString(heapChars, length, hash);
+  return allocateString(vm, heapChars, length, hash);
 }
 
-ObjString* takeString(char* chars, int length) {
+ObjString* takeString(ObaVM* vm, char* chars, int length) {
   uint32_t hash = hashString(chars, length);
-  return allocateString(chars, length, hash);
+  return allocateString(vm, chars, length, hash);
 }
 
-void freeObject(Obj obj) {
-  // TODO(kendal): Implement
-  // TODO(kendal): Free string.
-  // TODO(kendal): Free native.
-  // TODO(kendal): Free closure.
+void freeObject(Obj* obj) {
+  switch (obj->type) {
+  case OBJ_STRING: {
+    ObjString* string = (ObjString*)obj;
+    FREE_ARRAY(char, string->chars, string->length + 1);
+    FREE(ObjString, obj);
+    break;
+  }
+  case OBJ_NATIVE:
+    FREE(ObjNative, obj);
+    break;
+  case OBJ_FUNCTION: {
+    ObjFunction* function = (ObjFunction*)obj;
+    freeChunk(&function->chunk);
+    FREE(ObjFunction, obj);
+    break;
+  }
+  case OBJ_CLOSURE: {
+    ObjClosure* closure = (ObjClosure*)obj;
+    FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
+    FREE(ObjClosure, obj);
+    break;
+  }
+  case OBJ_UPVALUE:
+    FREE(ObjUpvalue, obj);
+    break;
+  }
 }
 
 bool objectsEqual(Value ao, Value bo) {
