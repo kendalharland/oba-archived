@@ -630,6 +630,8 @@ do {                                                                           \
 #undef BINARY_OP
 #undef CASE_OP
 #undef DISPATCH
+#undef INTERPRET_LOOP
+#undef DEBUG_TRACE_INSTRUCTIONSSSS
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
