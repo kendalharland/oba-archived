@@ -185,3 +185,80 @@ void printValue(Value value) {
     break;
   }
 }
+
+void initTable(Table* table) {
+  table->count = 0;
+  table->capacity = 0;
+  table->entries = NULL;
+}
+
+void freeTable(Table* table) {
+  FREE_ARRAY(Entry, table->entries, table->capacity);
+  initTable(table);
+}
+
+Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
+  uint32_t index = key->hash % capacity;
+  for (;;) {
+    Entry* entry = &entries[index];
+
+    // TODO(kendal): Use string interning instead of comparing hashes?
+    if (entry->key == NULL || entry->key->hash == key->hash) {
+      return entry;
+    }
+
+    index = (index + 1) % capacity;
+  }
+}
+
+void adjustCapacity(Table* table, int capacity) {
+  Entry* entries = ALLOCATE(Entry, capacity);
+  for (int i = 0; i < capacity; i++) {
+    entries[i].key = NULL;
+    // TODO(kendal): Set the value to some zero value.
+  }
+
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    if (entry->key == NULL)
+      continue;
+
+    Entry* dest = findEntry(entries, capacity, entry->key);
+    dest->key = entry->key;
+    dest->value = entry->value;
+  }
+
+  FREE_ARRAY(Entry, table->entries, table->capacity);
+  table->entries = entries;
+  table->capacity = capacity;
+}
+
+bool tableGet(Table* table, ObjString* key, Value* value) {
+  if (table->count == 0)
+    return false;
+
+  Entry* entry = findEntry(table->entries, table->capacity, key);
+  if (entry->key == NULL) {
+    return false;
+  }
+
+  *value = entry->value;
+  return true;
+}
+
+bool tableSet(Table* table, ObjString* key, Value value) {
+  if (table->count <= table->capacity * TABLE_MAX_LOAD) {
+    int capacity = GROW_CAPACITY(table->capacity);
+    adjustCapacity(table, capacity);
+  }
+
+  Entry* entry = findEntry(table->entries, table->capacity, key);
+
+  bool isNewKey = entry->key == NULL;
+  if (isNewKey)
+    table->count++;
+
+  entry->key = key;
+  entry->value = value;
+  return isNewKey;
+}

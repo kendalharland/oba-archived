@@ -11,11 +11,6 @@
 #define STACK_MAX 256
 #define FRAMES_MAX 256
 
-#define TABLE_MAX_LOAD 0.75
-
-typedef struct sTable Table;
-typedef struct sEntry Entry;
-
 struct ObaVM {
   CallFrame frames[FRAMES_MAX];
   CallFrame* frame;

@@ -35,6 +35,8 @@
 #define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
 #define AS_UPVALUE(value) ((ObjUpvalue*)AS_OBJ(value))
 
+#define TABLE_MAX_LOAD 0.75
+
 // An Oba object in heap memory.
 typedef enum {
   OBJ_STRING,
@@ -91,7 +93,22 @@ typedef struct {
   NativeFn function;
 } ObjNative;
 
-typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+typedef struct {
+  ObjString* key;
+  Value value;
+} Entry;
+
+typedef struct {
+  int count;
+  int capacity;
+  Entry* entries;
+} Table;
+
+typedef struct {
+  Obj obj;
+  Table* variables;
+  char* name;
+} ObjModule;
 
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
@@ -105,15 +122,23 @@ void freeValueArray(ValueArray*);
 
 // Writes a byte to the given [ValueArray], allocating if necessary.
 void writeValueArray(ValueArray*, Value);
-
+bool valuesEqual(Value a, Value b);
 void printValue(Value value);
 
 ObjString* copyString(ObaVM* vm, const char* chars, int length);
 Obj* allocateObject(ObaVM* vm, size_t size, ObjType type);
+void freeObject(Obj*);
+
 ObjString* allocateString(ObaVM* vm, char* chars, int length, uint32_t hash);
 ObjString* takeString(ObaVM* vm, char* chars, int length);
-bool valuesEqual(Value a, Value b);
+
 ObjNative* newNative(ObaVM*, NativeFn);
 
-void freeObject(Obj*);
+void initTable(Table* table);
+void freeTable(Table* table);
+Entry* findEntry(Entry* entries, int capacity, ObjString* key);
+void adjustCapacity(Table* table, int capacity);
+bool tableGet(Table* table, ObjString* key, Value* value);
+bool tableSet(Table* table, ObjString* key, Value value);
+
 #endif

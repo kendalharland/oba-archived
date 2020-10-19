@@ -43,7 +43,6 @@ typedef struct {
 struct sCompiler {
   Compiler* parent;
   ObjFunction* function;
-  FunctionType type;
 
   Local locals[MAX_LOCALS];
   Upvalue upvalues[UINT8_MAX];
@@ -63,7 +62,6 @@ void initCompiler(ObaVM* vm, Compiler* compiler, Parser* parser,
   compiler->localCount = 0;
   compiler->currentDepth = 0;
   compiler->function = newFunction(vm);
-  compiler->type = TYPE_SCRIPT;
 }
 
 static void printError(Compiler* compiler, int line, const char* label,
