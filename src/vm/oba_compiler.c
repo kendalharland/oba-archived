@@ -203,18 +203,6 @@ static void defineGlobal(Compiler* compiler, int global) {
   emitByte(compiler, global);
 }
 
-static void setLocal(Compiler* compiler, int slot) {
-  // The local's value is already at the top of the stack.
-  emitOp(compiler, OP_SET_LOCAL);
-  emitByte(compiler, slot);
-}
-
-static void setUpvalue(Compiler* compiler, int slot) {
-  // The upvalue's value is already at the top of the stack.
-  emitOp(compiler, OP_SET_UPVALUE);
-  emitByte(compiler, slot);
-}
-
 // Declares a new local in an uninitialized state.
 // Any attempt to use the local before it is initialized is an error.
 static void addLocal(Compiler* compiler, Token name) {
@@ -237,11 +225,6 @@ static void markInitialized(Compiler* compiler) {
   // the most recent one.
   Local* local = &compiler->locals[compiler->localCount - 1];
   local->depth = compiler->currentDepth;
-}
-
-static void defineLocal(Compiler* compiler) {
-  markInitialized(compiler);
-  setLocal(compiler, compiler->localCount - 1);
 }
 
 static bool identifiersMatch(Token a, Token b) {
@@ -282,40 +265,21 @@ static void defineVariable(Compiler* compiler, int variable) {
   defineGlobal(compiler, variable);
 }
 
-// TODO(kendal): Handle the case where an existing variable is being re-set to
-// some value, rather than declared or defined for the first time.
-
-static void getGlobal(Compiler* compiler, Value name) {
-  int global = addConstant(compiler, name);
-  emitOp(compiler, OP_GET_GLOBAL);
-  emitByte(compiler, global);
-}
-
-static void getLocal(Compiler* compiler, int slot) {
-  Local local = compiler->locals[slot];
-  if (local.depth < 0) {
-    error(compiler, "Cannot read local variable in its own initializer");
-    return;
-  }
-  emitOp(compiler, OP_GET_LOCAL);
-  emitByte(compiler, (uint8_t)slot);
-}
-
-static void getUpvalue(Compiler* compiler, int slot) {
-  emitOp(compiler, OP_GET_UPVALUE);
-  emitByte(compiler, (uint8_t)slot);
-}
-
 // Finds a local variable named [name] in the current scope.
 // Returns a negative number if it is not found.
-static int lookupLocal(Compiler* compiler, Token name) {
+static int resolveLocal(Compiler* compiler, Token name) {
   // Find the first local whose depth is gte the current scope and whose
   // token matches `name`.
   for (int i = compiler->localCount - 1; i >= 0; i--) {
     Local local = compiler->locals[i];
     if (local.token.length == name.length &&
         identifiersMatch(local.token, name)) {
-      return i;
+      if (local.depth < 0) {
+        error(compiler, "Cannot read local variable in its own initializer");
+        return -1;
+      } else {
+        return i;
+      }
     }
   }
   return -1;
@@ -331,7 +295,7 @@ static int resolveUpvalue(Compiler* compiler, Token name) {
   if (compiler->parent == NULL)
     return -1;
 
-  int local = lookupLocal(compiler->parent, name);
+  int local = resolveLocal(compiler->parent, name);
   if (local >= 0) {
     compiler->parent->locals[local].isCaptured = true;
     return addUpvalue(compiler, local, true);
@@ -343,45 +307,6 @@ static int resolveUpvalue(Compiler* compiler, Token name) {
   }
 
   return -1;
-}
-
-// TODO(kendal): Combine get/set into a single function.
-
-static void getVariable(Compiler* compiler) {
-  Token name = compiler->parser->previous;
-  int local = lookupLocal(compiler, name);
-  if (local >= 0) {
-    getLocal(compiler, local);
-    return;
-  }
-
-  int upvalue = resolveUpvalue(compiler, name);
-  if (upvalue >= 0) {
-    getUpvalue(compiler, upvalue);
-    return;
-  }
-
-  Value value = OBJ_VAL(copyString(compiler->vm, name.start, name.length));
-  getGlobal(compiler, value);
-}
-
-static void setVariable(Compiler* compiler, Token name) {
-  int local = lookupLocal(compiler, name);
-  if (local >= 0) {
-    setLocal(compiler, local);
-    return;
-  }
-
-  int upvalue = resolveUpvalue(compiler, name);
-  if (upvalue >= 0) {
-    setUpvalue(compiler, upvalue);
-    return;
-  }
-
-  // Globals are constant.
-  // TODO(kendal): Lookup the global so that we can print whether it's defined
-  // at all.
-  error(compiler, "Cannot reassign global variable");
 }
 
 // Grammar --------------------------------------------------------------------
@@ -931,19 +856,35 @@ static void string(Compiler* compiler, bool canAssign) {
                              compiler->parser->previous.length - 2)));
 }
 
-static void assignment(Compiler* compiler, bool canAssign) {
-  if (!canAssign) {
-    error(compiler, "Cannot assign variable in this scope");
-    return;
-  }
+static void variable(Compiler* compiler, bool canAssign) {
+  OpCode getOp;
+  OpCode setOp;
 
   Token name = compiler->parser->previous;
+  bool set = canAssign && match(compiler, TOK_ASSIGN);
 
-  // Compile the initializer.
-  consume(compiler, TOK_ASSIGN, "Expected '='");
-  expression(compiler);
+  int arg = resolveLocal(compiler, name);
+  if (arg >= 0) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+  } else if ((arg = resolveUpvalue(compiler, name)) >= 0) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
+  } else {
+    if (set) {
+      error(compiler, "Cannot reassign global variable");
+    }
+    Value value = OBJ_VAL(copyString(compiler->vm, name.start, name.length));
+    arg = addConstant(compiler, value);
+    getOp = OP_GET_GLOBAL;
+  }
 
-  setVariable(compiler, name);
+  if (set) {
+    expression(compiler);
+  }
+
+  emitOp(compiler, set ? setOp : getOp);
+  emitByte(compiler, (uint8_t)arg);
 }
 
 static uint8_t argumentList(Compiler* compiler) {
@@ -961,25 +902,20 @@ static uint8_t argumentList(Compiler* compiler) {
 }
 
 static void functionCall(Compiler* compiler, bool canAssign) {
-  Token name = compiler->parser->previous;
-  getVariable(compiler);
-  consume(compiler, TOK_LPAREN, "Expected '('");
+  variable(compiler, canAssign);
+  consume(compiler, TOK_LPAREN, "Expected '(' before parameter list");
   uint8_t argCount = argumentList(compiler);
-  consume(compiler, TOK_RPAREN, "Expected ')'");
+  consume(compiler, TOK_RPAREN, "Expected ')' after parameter list");
   emitOp(compiler, OP_CALL);
   emitByte(compiler, argCount);
 }
 
 static void identifier(Compiler* compiler, bool canAssign) {
-  if (peek(compiler) == TOK_ASSIGN) {
-    assignment(compiler, canAssign);
-    return;
-  }
   if (peek(compiler) == TOK_LPAREN) {
     functionCall(compiler, canAssign);
     return;
   }
-  getVariable(compiler);
+  variable(compiler, canAssign);
 }
 
 // TODO(kjharland): Support variable patterns.
@@ -1002,7 +938,7 @@ static void pattern(Compiler* compiler) {
                                               token.length - 2)));
     break;
   case TOK_IDENT:
-    getVariable(compiler);
+    variable(compiler, false);
     break;
   default:
     error(compiler, "Expected a constant value.");
