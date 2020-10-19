@@ -1,0 +1,32 @@
+// Example of using functions as "objects".
+
+// Creates a new "vector" from the given x and y coordinates.
+fn new_vector x y {
+   fn vector coord {
+     match coord
+       | "x" = x
+       | "y" = y
+       ;
+   }
+
+   vector
+}
+
+// Returns the x-coordinate of the given vector.
+fn vx vector {
+   vector("x")
+}
+
+// Returns the y-coordinate of the given vector.
+fn vy vector {
+   vector("y")
+} 
+
+let v1 = new_vector(1, 2)
+let v2 = new_vector(3, 4)
+
+debug vx(v1) // expect: 1
+debug vy(v1) // expect: 2
+debug vx(v2) // expect: 3
+debug vy(v2) // expect: 4
+

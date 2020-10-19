@@ -6,6 +6,7 @@ ObjFunction* newFunction(ObaVM* vm) {
   ObjFunction* function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
   initChunk(&function->chunk);
   function->arity = 0;
+  function->upvalueCount = 0;
   function->name = NULL;
 }
 

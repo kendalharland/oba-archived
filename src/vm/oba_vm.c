@@ -266,14 +266,10 @@ static void freeObjects(ObaVM* vm) {
 }
 
 void obaFreeVM(ObaVM* vm) {
-  if (vm->frame != NULL && vm->frame->closure->function != NULL) {
-    freeChunk(&vm->frame->closure->function->chunk);
-  }
-  vm->stackTop = NULL;
+  freeChunk(&vm->frame->closure->function->chunk);
   freeTable(vm->globals);
   freeObjects(vm);
   free(vm);
-  vm = NULL;
 }
 
 static void return_(ObaVM* vm) {
@@ -524,6 +520,8 @@ do {                                                                           \
       break;
     }
     case OP_EXIT:
+      // Pop the root closure off the stack.
+      pop(vm);
       return OBA_RESULT_SUCCESS;
     }
   }

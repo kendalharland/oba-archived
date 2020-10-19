@@ -32,7 +32,6 @@ void writeValueArray(ValueArray* array, Value value) {
 Obj* allocateObject(ObaVM* vm, size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
-
   object->next = vm->objects;
   vm->objects = object;
   return object;
