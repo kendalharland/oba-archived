@@ -1,3 +1,2 @@
-// expect compile error: Cannot reassign global variable
 let x = 10
-x = 20
+x = 20 // expect compile error: module main line 2: Cannot reassign global variable

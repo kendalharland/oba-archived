@@ -1,0 +1,4 @@
+// Tests need to be run from the project root for this to work.
+import "mod/time.oba"
+
+debug now()

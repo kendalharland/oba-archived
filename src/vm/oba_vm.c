@@ -150,36 +150,64 @@ static void closeUpvalue(ObaVM* vm, Value* last) {
   }
 }
 
-ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
-  ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
-  memset(vm, 0, sizeof(ObaVM));
-
-  vm->openUpvalues = NULL;
-  vm->objects = NULL;
-  vm->globals = (Table*)realloc(NULL, sizeof(Table));
-  initTable(vm->globals);
-  resetStack(vm);
-  vm->frame = vm->frames;
-
-  registerBuiltins(vm, builtins, builtinsLength);
-  return vm;
-}
-
-static void freeObjects(ObaVM* vm) {
-  Obj* obj = vm->objects;
-  while (obj != NULL) {
-    Obj* next = obj->next;
-    freeObject(obj);
-    obj = next;
+char* readFile(ObaVM* vm, const char* path) {
+  FILE* fp = fopen(path, "rb");
+  if (!fp) {
+    perror("failed to read file");
+    exit(1);
   }
-  vm->objects = NULL;
+
+  // Get the file size.
+  fseek(fp, 0L, SEEK_END);
+  long size = ftell(fp);
+  rewind(fp);
+
+  // Read the contents.
+  char* contents = malloc(size + 1);
+  if (!contents) {
+    fclose(fp);
+    perror("failed to allocate memory for file");
+    exit(1);
+  }
+  if (1 != fread(contents, size, 1, fp)) {
+    fclose(fp);
+    free(contents);
+    perror("failed to read file");
+    exit(1);
+  }
+  contents[size] = '\0';
+
+  fclose(fp);
+  return contents;
 }
 
-void obaFreeVM(ObaVM* vm) {
-  freeChunk(&vm->frame->closure->function->chunk);
-  freeTable(vm->globals);
-  freeObjects(vm);
-  free(vm);
+static Value resolveModule(ObaVM* vm, Value name) { return name; }
+
+ObjClosure* compileInModule(ObaVM* vm, Value name, const char* source) {
+  ObjString* path = AS_STRING(name);
+  ObjModule* module = newModule(vm, path->chars, path->length);
+  ObjFunction* function = obaCompile(vm, module, source);
+  if (function == NULL) {
+    return NULL;
+  }
+  return newClosure(vm, function);
+}
+
+// TODO(kendal): If the module is already loaded, bail early.
+static ObjClosure* importModule(ObaVM* vm, Value name) {
+  name = resolveModule(vm, name);
+
+  char* source = readFile(vm, AS_CSTRING(name));
+
+  ObjClosure* moduleClosure = compileInModule(vm, name, source);
+  if (moduleClosure == NULL) {
+    FREE_ARRAY(char, source, strlen(source));
+    return NULL;
+  }
+
+  FREE_ARRAY(char, source, strlen(source));
+
+  return moduleClosure;
 }
 
 static void return_(ObaVM* vm) {
@@ -208,6 +236,41 @@ static void concatenate(ObaVM* vm) {
 
   ObjString* result = takeString(vm, chars, length);
   push(vm, OBJ_VAL(result));
+}
+
+ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
+  ObaVM* vm = (ObaVM*)realloc(NULL, sizeof(*vm));
+  memset(vm, 0, sizeof(ObaVM));
+
+  vm->openUpvalues = NULL;
+  vm->objects = NULL;
+  vm->globals = (Table*)realloc(NULL, sizeof(Table));
+  initTable(vm->globals);
+  resetStack(vm);
+  vm->frame = vm->frames;
+
+  registerBuiltins(vm, builtins, builtinsLength);
+  return vm;
+}
+
+static void freeObjects(ObaVM* vm) {
+  Obj* obj = vm->objects;
+  while (obj != NULL) {
+    Obj* next = obj->next;
+    freeObject(obj);
+    obj = next;
+  }
+  vm->objects = NULL;
+}
+
+void obaFreeVM(ObaVM* vm) {
+  // The closure is unset if an error occurred during compilation.
+  if (vm->frame->closure != NULL) {
+    freeChunk(&vm->frame->closure->function->chunk);
+  }
+  freeTable(vm->globals);
+  freeObjects(vm);
+  free(vm);
 }
 
 static ObaInterpretResult run(ObaVM* vm) {
@@ -549,6 +612,12 @@ do {                                                                           \
       DISPATCH();
     }
 
+    CASE_OP(IMPORT_MODULE) : {
+      ObjClosure* moduleClosure = importModule(vm, READ_CONSTANT());
+      push(vm, OBJ_VAL(moduleClosure));
+      DISPATCH();
+    }
+
     CASE_OP(EXIT) : {
       // Pop the root closure off the stack.
       pop(vm);
@@ -564,11 +633,12 @@ do {                                                                           \
 #undef CASE_OP
 #undef DISPATCH
 #undef INTERPRET_LOOP
-#undef DEBUG_TRACE_INSTRUCTIONSSSS
+#undef DEBUG_TRACE_INSTRUCTIONS
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-  ObjFunction* function = obaCompile(vm, source);
+  ObjModule* module = newModule(vm, "main", 4);
+  ObjFunction* function = obaCompile(vm, module, source);
   if (function == NULL) {
     return OBA_RESULT_COMPILE_ERROR;
   }

@@ -1,8 +1,7 @@
 {
   let a = "hi"
   {
-    // expect compile error: Cannot read local variable in its own initializer
     let a = a
-    debug a
+    debug a // expect compile error: module main line 5: Cannot read local variable in its own initializer
   }
 }

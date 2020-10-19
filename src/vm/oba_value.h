@@ -44,6 +44,7 @@ typedef enum {
   OBJ_CLOSURE,
   OBJ_NATIVE,
   OBJ_UPVALUE,
+  OBJ_MODULE,
 } ObjType;
 
 typedef struct Obj {
@@ -107,7 +108,7 @@ typedef struct {
 typedef struct {
   Obj obj;
   Table* variables;
-  char* name;
+  ObjString* name;
 } ObjModule;
 
 static inline bool isObjType(Value value, ObjType type) {
@@ -133,6 +134,8 @@ ObjString* allocateString(ObaVM* vm, char* chars, int length, uint32_t hash);
 ObjString* takeString(ObaVM* vm, char* chars, int length);
 
 ObjNative* newNative(ObaVM*, NativeFn);
+
+ObjModule* newModule(ObaVM* vm, const char* path, int pathLength);
 
 void initTable(Table* table);
 void freeTable(Table* table);

@@ -18,6 +18,7 @@ struct ObaVM {
   Value stack[STACK_MAX];
   Value* stackTop;
   Table* globals;
+  Table* modules;
   ObjUpvalue* openUpvalues;
 
   Obj* objects;

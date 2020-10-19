@@ -48,12 +48,6 @@ ObjString* allocateString(ObaVM* vm, char* chars, int length, uint32_t hash) {
   return string;
 }
 
-ObjNative* newNative(ObaVM* vm, NativeFn function) {
-  ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
-  native->function = function;
-  return native;
-}
-
 static uint32_t hashString(const char* key, int length) {
   uint32_t hash = 2166136261u;
 
@@ -77,6 +71,20 @@ ObjString* copyString(ObaVM* vm, const char* chars, int length) {
 ObjString* takeString(ObaVM* vm, char* chars, int length) {
   uint32_t hash = hashString(chars, length);
   return allocateString(vm, chars, length, hash);
+}
+
+ObjNative* newNative(ObaVM* vm, NativeFn function) {
+  ObjNative* native = ALLOCATE_OBJ(vm, ObjNative, OBJ_NATIVE);
+  native->function = function;
+  return native;
+}
+
+ObjModule* newModule(ObaVM* vm, const char* path, int pathLength) {
+  ObjModule* module = ALLOCATE_OBJ(vm, ObjModule, OBJ_MODULE);
+  module->variables = (Table*)realloc(NULL, sizeof(Table));
+  initTable(module->variables);
+  module->name = copyString(vm, path, pathLength);
+  return module;
 }
 
 void freeObject(Obj* obj) {
@@ -105,6 +113,13 @@ void freeObject(Obj* obj) {
   case OBJ_UPVALUE:
     FREE(ObjUpvalue, obj);
     break;
+  case OBJ_MODULE: {
+    ObjModule* module = (ObjModule*)obj;
+    freeObject((Obj*)module->name);
+    freeTable(module->variables);
+    FREE(ObjModule, obj);
+    break;
+  }
   }
 }
 

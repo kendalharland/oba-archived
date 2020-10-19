@@ -122,6 +122,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_RETURN", chunk, offset);
   case OP_DEBUG:
     return simpleInstruction("OP_DEBUG", chunk, offset);
+  case OP_IMPORT_MODULE:
+    return simpleInstruction("OP_IMPORT_MODULE", chunk, offset);
   case OP_EXIT:
     return simpleInstruction("OP_EXIT", chunk, offset);
   default:

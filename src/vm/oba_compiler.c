@@ -29,6 +29,9 @@ typedef struct {
   const char* currentChar;
   const char* source;
 
+  // The module being parsed.
+  ObjModule* module;
+
   int currentLine;
 } Parser;
 
@@ -64,10 +67,12 @@ void initCompiler(ObaVM* vm, Compiler* compiler, Parser* parser,
   compiler->function = newFunction(vm);
 }
 
-static void printError(Compiler* compiler, int line, const char* label,
+static void printError(Compiler* compiler, const char* label,
                        const char* format, va_list args) {
   char message[1024];
-  int length = sprintf(message, "%s: ", label);
+  int length = sprintf(message, "%s: module %s line %d: ", label,
+                       compiler->parser->module->name->chars,
+                       compiler->parser->currentLine);
   length += vsprintf(message + length, format, args);
   // TODO(kendal): Ensure length < 1024
   fprintf(stderr, "%s\n", message);
@@ -78,8 +83,7 @@ static void lexError(Compiler* compiler, const char* format, ...) {
 
   va_list args;
   va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Parse error", format,
-             args);
+  printError(compiler, "Parse error", format, args);
   va_end(args);
 }
 
@@ -92,8 +96,7 @@ static void error(Compiler* compiler, const char* format, ...) {
 
   va_list args;
   va_start(args, format);
-  printError(compiler, compiler->parser->currentLine, "Compile error", format,
-             args);
+  printError(compiler, "Compile error", format, args);
   va_end(args);
 }
 
@@ -381,6 +384,7 @@ GrammarRule rules[] =  {
   /* TOK_WHILE     */ UNUSED,  
   /* TOK_MATCH     */ PREFIX(matchExpr),
   /* TOK_FN        */ UNUSED,
+  /* TOK_IMPORT    */ UNUSED,
   /* TOK_ERROR     */ UNUSED,  
   /* TOK_EOF       */ UNUSED,
 };
@@ -397,16 +401,17 @@ typedef struct {
 } Keyword;
 
 static Keyword keywords[] = {
-    {"debug", 5, TOK_DEBUG},
-    {"false", 5, TOK_FALSE},
-    {"let",   3, TOK_LET},
-    {"true",  4, TOK_TRUE},
-    {"if",    2, TOK_IF},
-    {"else",  4, TOK_ELSE},
-    {"while", 5, TOK_WHILE},
-    {"match", 5, TOK_MATCH},
-    {"fn",    2, TOK_FN},
-    {NULL,    0, TOK_EOF}, // Sentinel to mark the end of the array.
+    {"debug",  5, TOK_DEBUG},
+    {"false",  5, TOK_FALSE},
+    {"let",    3, TOK_LET},
+    {"true",   4, TOK_TRUE},
+    {"if",     2, TOK_IF},
+    {"else",   4, TOK_ELSE},
+    {"while",  5, TOK_WHILE},
+    {"match",  5, TOK_MATCH},
+    {"fn",     2, TOK_FN},
+    {"import", 6, TOK_IMPORT},
+    {NULL,     0, TOK_EOF}, // Sentinel to mark the end of the array.
 };
 
 // clang-format on
@@ -659,7 +664,7 @@ static void parse(Compiler* compiler, int precedence) {
 
 static void expression(Compiler* compiler) { parse(compiler, PREC_LOWEST); }
 
-static void assignStmt(Compiler* compiler) {
+static void variableDeclaration(Compiler* compiler) {
   consume(compiler, TOK_IDENT, "Expected an identifier.");
   // Get the name, but don't declare it yet; A variable should not be in scope
   // in its own initializer.
@@ -753,28 +758,12 @@ static void whileStmt(Compiler* compiler) {
   patchJump(compiler, offset);
 }
 
-static void statement(Compiler* compiler) {
-  if (match(compiler, TOK_LET)) {
-    assignStmt(compiler);
-  } else if (match(compiler, TOK_DEBUG)) {
-    debugStmt(compiler);
-  } else if (match(compiler, TOK_LBRACK)) {
-    blockStmt(compiler);
-  } else if (match(compiler, TOK_IF)) {
-    ifStmt(compiler);
-  } else if (match(compiler, TOK_WHILE)) {
-    whileStmt(compiler);
-  } else {
-    expression(compiler);
-  }
-}
-
 static void functionBlockBody(Compiler* compiler) {
   consume(compiler, TOK_LBRACK, "Expected '{' before function body");
   ignoreNewlines(compiler);
 
   while (!match(compiler, TOK_RBRACK)) {
-    declaration(compiler);
+    statement(compiler);
     ignoreNewlines(compiler);
   }
 }
@@ -832,9 +821,42 @@ static void functionDefinition(Compiler* compiler) {
   defineVariable(compiler, declareVariable(compiler, name));
 }
 
-static void declaration(Compiler* compiler) {
+static void statement(Compiler* compiler) {
   if (match(compiler, TOK_FN)) {
     functionDefinition(compiler);
+  } else if (match(compiler, TOK_LET)) {
+    variableDeclaration(compiler);
+  } else if (match(compiler, TOK_DEBUG)) {
+    debugStmt(compiler);
+  } else if (match(compiler, TOK_LBRACK)) {
+    blockStmt(compiler);
+  } else if (match(compiler, TOK_IF)) {
+    ifStmt(compiler);
+  } else if (match(compiler, TOK_WHILE)) {
+    whileStmt(compiler);
+  } else {
+    expression(compiler);
+  }
+}
+
+static void import(Compiler* compiler) {
+  if (!match(compiler, TOK_STRING)) {
+    error(compiler, "Expected a string after 'import'");
+    return;
+  }
+
+  Token token = compiler->parser->previous;
+  Value value =
+      OBJ_VAL(copyString(compiler->vm, token.start + 1, token.length - 2));
+  int constant = addConstant(compiler, value);
+
+  emitOp(compiler, OP_IMPORT_MODULE);
+  emitByte(compiler, (uint8_t)constant);
+}
+
+static void declaration(Compiler* compiler) {
+  if (match(compiler, TOK_IMPORT)) {
+    import(compiler);
   } else {
     statement(compiler);
   }
@@ -1088,13 +1110,14 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
   return compiler->function;
 }
 
-ObjFunction* compile(ObaVM* vm, const char* source, Compiler* parent,
-                     const char* name, int nameLength, bool isFunction) {
+ObjFunction* compile(ObaVM* vm, ObjModule* module, const char* source,
+                     Compiler* parent, const char* name, int nameLength) {
   // Skip the UTF-8 BOM if there is one.
   if (strncmp(source, "\xEF\xBB\xBF", 3) == 0)
     source += 3;
 
   Parser parser;
+  parser.module = module;
   parser.source = source;
   parser.tokenStart = source;
   parser.currentChar = source;
@@ -1111,23 +1134,19 @@ ObjFunction* compile(ObaVM* vm, const char* source, Compiler* parent,
   nextToken(&compiler);
   ignoreNewlines(&compiler);
 
-  if (isFunction) {
-    expression(&compiler);
-  } else {
-    while (!match(&compiler, TOK_EOF)) {
-      declaration(&compiler);
-      // If no newline, the file must end on this line.
-      if (!matchLine(&compiler)) {
-        consume(&compiler, TOK_EOF, "Expected end of file.");
-        break;
-      }
+  while (!match(&compiler, TOK_EOF)) {
+    declaration(&compiler);
+    // If no newline, the file must end on this line.
+    if (!matchLine(&compiler)) {
+      consume(&compiler, TOK_EOF, "Expected end of file.");
+      break;
     }
-    emitOp(&compiler, OP_EXIT);
   }
+  emitOp(&compiler, OP_EXIT);
 
   return endCompiler(&compiler, name, nameLength);
 }
 
-ObjFunction* obaCompile(ObaVM* vm, const char* source) {
-  return compile(vm, source, NULL, "(script)", 8, false);
+ObjFunction* obaCompile(ObaVM* vm, ObjModule* module, const char* source) {
+  return compile(vm, module, source, NULL, "(script)", 8);
 }
