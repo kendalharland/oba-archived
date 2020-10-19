@@ -2,15 +2,20 @@ import argparse
 import glob
 import os
 import re
-import subprocess
-from subprocess import PIPE, Popen
 import sys
+
+from subprocess import PIPE, Popen
 
 TEST_DIR = "test"
 
 EXPECT_OUTPUT_RE = re.compile("// expect: ?(.*)")
 EXPECT_RUNTIME_ERROR_RE = re.compile("// expect runtime error: ?(.*)")
 EXPECT_COMPILE_ERROR_RE = re.compile("// expect compile error: ?(.*)")
+
+# Exit codes
+PASSED = 0
+FAILED = 1
+FATAL = 2
 
 
 class TestError(Exception):
@@ -90,11 +95,6 @@ def run_test(oba, test_file):
     return verify_expectations(expected_errs, stderr.splitlines(), "stderr")
 
 
-PASSED = 0
-FAILED = 1
-FATAL = 2
-
-
 def run_test_file(oba, test_file):
     test_name = os.path.relpath(test_file, TEST_DIR)
 
@@ -103,7 +103,7 @@ def run_test_file(oba, test_file):
     except TestError as e:
         print("- FATAL ERROR: ", test_name)
         print("  {}".format(e))
-        return FAILED
+        return FATAL
 
     if not errors:
         print("- PASS " + test_name)
@@ -119,7 +119,7 @@ def run_test_files(oba, filepaths):
     exit_code = PASSED
     for filepath in filepaths:
         result = run_test_file(oba, filepath)
-        if result:
+        if result > PASSED:
             exit_code = result
     return exit_code
 
@@ -129,7 +129,7 @@ def main():
 
     test_file_glob = os.path.join(TEST_DIR, args.glob)
     test_files = glob.glob(test_file_glob, recursive=True)
-    exit(run_test_files(args.oba, test_files))
+    sys.exit(run_test_files(args.oba, test_files))
 
 
 main()

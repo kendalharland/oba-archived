@@ -112,7 +112,6 @@ bool objectsEqual(Value ao, Value bo) {
   if (OBJ_TYPE(ao) != OBJ_TYPE(bo))
     return false;
 
-  // TODO(kendal): Closures.
   switch (OBJ_TYPE(ao)) {
   case OBJ_STRING: {
     ObjString* a = AS_STRING(ao);
@@ -120,13 +119,11 @@ bool objectsEqual(Value ao, Value bo) {
     return a->length == b->length && strcmp(a->chars, b->chars) == 0;
   }
   case OBJ_FUNCTION: {
-    // TODO(kendal): Test this.
     ObjFunction* a = AS_FUNCTION(ao);
     ObjFunction* b = AS_FUNCTION(bo);
     return a == b;
   }
   case OBJ_NATIVE: {
-    // TODO(kendal): Test this.
     NativeFn a = AS_NATIVE(ao);
     NativeFn b = AS_NATIVE(bo);
     return a == b;

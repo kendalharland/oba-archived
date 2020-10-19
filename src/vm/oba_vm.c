@@ -316,8 +316,6 @@ do {                                                                           \
     double b = AS_NUMBER(pop(vm));                                             \
     double a = AS_NUMBER(pop(vm));                                             \
     push(vm, type(a op b));                                                    \
-  } else if (IS_STRING(peek(vm, 1)) && IS_STRING(peek(vm, 2))) {               \
-    concatenate(vm);                                                           \
   } else {                                                                     \
     runtimeError(vm, "Expected numeric or string operands");                   \
     return OBA_RESULT_RUNTIME_ERROR;                                           \
@@ -348,9 +346,14 @@ do {                                                                           \
     case OP_ERROR:
       runtimeError(vm, AS_CSTRING(READ_CONSTANT()));
       return OBA_RESULT_RUNTIME_ERROR;
-    case OP_ADD:
-      BINARY_OP(OBA_NUMBER, +);
+    case OP_ADD: {
+      if (IS_STRING(peek(vm, 1)) && IS_STRING(peek(vm, 2))) {
+        concatenate(vm);
+      } else {
+        BINARY_OP(OBA_NUMBER, +);
+      }
       break;
+    }
     case OP_MINUS:
       BINARY_OP(OBA_NUMBER, -);
       break;
