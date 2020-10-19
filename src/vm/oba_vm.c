@@ -377,7 +377,6 @@ do {                                                                           \
     case OP_LT:
       BINARY_OP(OBA_BOOL, <);
       break;
-    // TODO(kendal): Bug! This will concatenate if the operands are strings.
     case OP_GTE:
       BINARY_OP(OBA_BOOL, >=);
       break;
