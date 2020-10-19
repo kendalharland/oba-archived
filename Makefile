@@ -4,6 +4,8 @@ endif
 
 ifeq ($(config),debug)
 			 ALL_CFLAGS += -g -DDEBUG_TRACE_EXECUTION
+else ifeq ($(config),optimize)
+			 ALL_CFLAGS += -DOBA_COMPUTED_GOTO
 else ifneq ($(config),release)
 		$(error "invalid configuration $(config)")
 endif
@@ -30,7 +32,7 @@ format:
 
 oba:
 	@echo "==== Building oba ($(config)) ===="
-	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*
+	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*.c
 
 run: clean oba
 	@echo "==== Running oba ($(config)) ===="

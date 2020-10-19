@@ -8,7 +8,6 @@
 #include "oba_compiler.h"
 #include "oba_function.h"
 #include "oba_memory.h"
-#include "oba_opcodes.h"
 #include "oba_token.h"
 #include "oba_vm.h"
 
@@ -1061,9 +1060,6 @@ static void infixOp(Compiler* compiler, bool canAssign) {
     return;
   case TOK_NEQ:
     emitOp(compiler, OP_NEQ);
-    return;
-  case TOK_ASSIGN:
-    emitOp(compiler, OP_ASSIGN);
     return;
   default:
     error(compiler, "Invalid operator %s", rule->name);

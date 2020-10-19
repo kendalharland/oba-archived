@@ -3,6 +3,7 @@
 #include "oba_debug.h"
 #include "oba_function.h"
 #include "oba_value.h"
+#include "oba_vm.h"
 
 static int constantInstruction(const char* name, Chunk* chunk, int offset) {
   uint8_t constant = chunk->code[offset + 1];
@@ -73,8 +74,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_EQ", chunk, offset);
   case OP_NEQ:
     return simpleInstruction("OP_NEQ", chunk, offset);
-  case OP_ASSIGN:
-    return simpleInstruction("OP_ASSIGN", chunk, offset);
   case OP_DEFINE_GLOBAL:
     return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL:

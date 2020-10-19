@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #include "oba.h"
-#include "oba_opcodes.h"
+#include "oba_chunk.h"
 #include "oba_value.h"
 
 typedef struct ObjUpvalue {

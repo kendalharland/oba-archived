@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "oba_chunk.h"
 #include "oba_memory.h"
-#include "oba_opcodes.h"
 
 void initChunk(Chunk* chunk) {
   chunk->capacity = 0;

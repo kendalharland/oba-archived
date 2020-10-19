@@ -3,7 +3,6 @@
 
 #include "oba_compiler.h"
 #include "oba_function.h"
-#include "oba_opcodes.h"
 #include "oba_token.h"
 #include "oba_value.h"
 
@@ -28,5 +27,11 @@ struct ObaVM {
 
   Obj* objects;
 };
+
+typedef enum {
+#define OPCODE(name) OP_##name,
+#include "oba_opcodes.h"
+#undef OPCODE
+} OpCode;
 
 #endif

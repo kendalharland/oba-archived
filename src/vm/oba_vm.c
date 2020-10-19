@@ -305,9 +305,13 @@ static ObaInterpretResult run(ObaVM* vm) {
   // clang-format off
 
 #define READ_BYTE() (*vm->frame->ip++)
+
 #define READ_SHORT() \
   (vm->frame->ip += 2, (uint16_t)((vm->frame->ip[-2] << 8) | vm->frame->ip[-1]))
-#define READ_CONSTANT() (vm->frame->closure->function->chunk.constants.values[READ_BYTE()])
+
+#define READ_CONSTANT() \
+  (vm->frame->closure->function->chunk.constants.values[READ_BYTE()])
+
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
 #define BINARY_OP(type, op)                                                    \
@@ -322,89 +326,161 @@ do {                                                                           \
   }                                                                            \
 } while (0)
 
-  // clang-format on
+// Debug output
 
-  for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    disassembleInstruction(
-        &vm->frame->closure->function->chunk,
-        (int)(vm->frame->ip - vm->frame->closure->function->chunk.code));
-    printf("          ");
-    for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
-      printf("[ ");
-      printValue(*slot);
-      printf(" ]");
-    }
+
+#define DEBUG_TRACE_INSTRUCTIONS()                                             \
+  disassembleInstruction(                                                      \
+        &vm->frame->closure->function->chunk,                                  \
+        (int)(vm->frame->ip - vm->frame->closure->function->chunk.code));      \
+    printf("          ");                                                      \
+    for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {               \
+      printf("[ ");                                                            \
+      printValue(*slot);                                                       \
+      printf(" ]");                                                            \
+    }                                                                          \
     printf("\n");
 
+  // clang-format on
+
+#else
+
+#define DEBUG_TRACE_INSTRUCTIONS() ;
+
 #endif
-    uint8_t instruction;
-    switch (instruction = READ_BYTE()) {
-    case OP_CONSTANT:
+
+  // Optimizations
+
+#ifdef OBA_COMPUTED_GOTO
+
+#define DISPATCH()                                                             \
+  do {                                                                         \
+    DEBUG_TRACE_INSTRUCTIONS();                                                \
+    goto* dispatchTable[READ_BYTE()];                                          \
+  } while (true)
+
+#define INTERPRET_LOOP DISPATCH();
+
+  // Computed goto dispatch table.
+  // eli.thegreenplace.net/2012/07/12/computed-goto-for-efficient-dispatch-tables
+  static void* dispatchTable[] = {
+#define OPCODE(name) &&op_##name,
+#include "oba_opcodes.h"
+#undef OPCODE
+  };
+
+#define CASE_OP(name) op_##name
+
+#else
+
+#define OPCODE(name) OP_##name
+#define CASE_OP(name) case OPCODE(name)
+
+#define INTERPRET_LOOP                                                         \
+  loop:                                                                        \
+  DEBUG_TRACE_INSTRUCTIONS();                                                  \
+  switch ((OpCode)READ_BYTE())
+
+#define DISPATCH() goto loop
+
+#endif
+
+  INTERPRET_LOOP {
+
+    CASE_OP(CONSTANT) : {
       push(vm, READ_CONSTANT());
-      break;
-    case OP_ERROR:
+      DISPATCH();
+    }
+
+    CASE_OP(ERROR) : {
       runtimeError(vm, AS_CSTRING(READ_CONSTANT()));
       return OBA_RESULT_RUNTIME_ERROR;
-    case OP_ADD: {
+    }
+
+    CASE_OP(ADD) : {
       if (IS_STRING(peek(vm, 1)) && IS_STRING(peek(vm, 2))) {
         concatenate(vm);
       } else {
         BINARY_OP(OBA_NUMBER, +);
       }
-      break;
+      DISPATCH();
     }
-    case OP_MINUS:
+
+    CASE_OP(MINUS) : {
       BINARY_OP(OBA_NUMBER, -);
-      break;
-    case OP_MULTIPLY:
+      DISPATCH();
+    }
+
+    CASE_OP(MULTIPLY) : {
       BINARY_OP(OBA_NUMBER, *);
-      break;
-    case OP_DIVIDE:
+      DISPATCH();
+    }
+
+    CASE_OP(DIVIDE) : {
       BINARY_OP(OBA_NUMBER, /);
-      break;
-    case OP_NOT: {
+      DISPATCH();
+    }
+
+    CASE_OP(NOT) : {
       if (!IS_BOOL(peek(vm, 1))) {
         runtimeError(vm, "Expected boolean value");
         return OBA_RESULT_RUNTIME_ERROR;
       }
       push(vm, OBA_BOOL(!AS_BOOL(pop(vm))));
-      break;
+      DISPATCH();
     }
-    case OP_GT:
+
+    CASE_OP(GT) : {
       BINARY_OP(OBA_BOOL, >);
-      break;
-    case OP_LT:
+      DISPATCH();
+    }
+
+    CASE_OP(LT) : {
       BINARY_OP(OBA_BOOL, <);
-      break;
-    case OP_GTE:
+      DISPATCH();
+    }
+
+    CASE_OP(GTE) : {
       BINARY_OP(OBA_BOOL, >=);
-      break;
-    case OP_LTE:
+      DISPATCH();
+    }
+
+    CASE_OP(LTE) : {
       BINARY_OP(OBA_BOOL, <=);
-      break;
-    case OP_EQ: {
+      DISPATCH();
+    }
+
+    CASE_OP(EQ) : {
       Value b = pop(vm);
       Value a = pop(vm);
       push(vm, OBA_BOOL(valuesEqual(a, b)));
-      break;
+      DISPATCH();
     }
-    case OP_NEQ: {
+
+    CASE_OP(NEQ) : {
       Value b = pop(vm);
       Value a = pop(vm);
       push(vm, OBA_BOOL(!valuesEqual(a, b)));
-      break;
+      DISPATCH();
     }
-    case OP_TRUE:
+
+    CASE_OP(TRUE) : {
       push(vm, OBA_BOOL(true));
-      break;
-    case OP_FALSE:
+      DISPATCH();
+    }
+
+    CASE_OP(FALSE) : {
       push(vm, OBA_BOOL(false));
-      break;
-    case OP_JUMP:
+      DISPATCH();
+    }
+
+    CASE_OP(JUMP) : {
       vm->frame->ip += READ_SHORT();
-      break;
-    case OP_JUMP_IF_FALSE: {
+      DISPATCH();
+    }
+
+    CASE_OP(JUMP_IF_FALSE) : {
       if (!IS_BOOL(peek(vm, 1))) {
         runtimeError(vm, "Expected a boolean expression");
         return OBA_RESULT_RUNTIME_ERROR;
@@ -413,9 +489,10 @@ do {                                                                           \
       bool cond = AS_BOOL(peek(vm, 1));
       if (!cond)
         vm->frame->ip += jump;
-      break;
+      DISPATCH();
     }
-    case OP_JUMP_IF_TRUE: {
+
+    CASE_OP(JUMP_IF_TRUE) : {
       if (!IS_BOOL(peek(vm, 1))) {
         runtimeError(vm, "Expected a boolean expression");
         return OBA_RESULT_RUNTIME_ERROR;
@@ -424,31 +501,35 @@ do {                                                                           \
       bool cond = AS_BOOL(peek(vm, 1));
       if (cond)
         vm->frame->ip += jump;
-      break;
+      DISPATCH();
     }
-    case OP_JUMP_IF_NOT_MATCH: {
+
+    CASE_OP(JUMP_IF_NOT_MATCH) : {
       // TODO(kjharland): Support variable matches.
       int jump = READ_SHORT();
       Value a = peek(vm, 2);
       Value b = pop(vm);
       if (!valuesEqual(b, a)) {
         vm->frame->ip += jump;
-        break;
+        DISPATCH();
       }
       pop(vm);
-      break;
+      DISPATCH();
     }
-    case OP_LOOP: {
+
+    CASE_OP(LOOP) : {
       vm->frame->ip = vm->frame->closure->function->chunk.code + READ_SHORT();
-      break;
+      DISPATCH();
     }
-    case OP_DEFINE_GLOBAL: {
+
+    CASE_OP(DEFINE_GLOBAL) : {
       ObjString* name = READ_STRING();
       tableSet(vm->globals, name, peek(vm, 1));
       pop(vm);
-      break;
+      DISPATCH();
     }
-    case OP_GET_GLOBAL: {
+
+    CASE_OP(GET_GLOBAL) : {
       ObjString* name = READ_STRING();
       Value value;
       if (!tableGet(vm->globals, name, &value)) {
@@ -456,44 +537,52 @@ do {                                                                           \
         return OBA_RESULT_RUNTIME_ERROR;
       }
       push(vm, value);
-      break;
+      DISPATCH();
     }
-    case OP_SET_LOCAL: {
+
+    CASE_OP(SET_LOCAL) : {
       uint8_t slot = READ_BYTE();
       vm->frame->slots[slot] = peek(vm, 1);
-      break;
+      DISPATCH();
     }
-    case OP_GET_LOCAL: {
+
+    CASE_OP(GET_LOCAL) : {
       // Locals live on the top of the stack.
       uint8_t slot = READ_BYTE();
       push(vm, vm->frame->slots[slot]);
-      break;
+      DISPATCH();
     }
-    case OP_SET_UPVALUE: {
+
+    CASE_OP(SET_UPVALUE) : {
       uint8_t slot = READ_BYTE();
       *vm->frame->closure->upvalues[slot]->location = peek(vm, 1);
-      break;
+      DISPATCH();
     }
-    case OP_GET_UPVALUE: {
+
+    CASE_OP(GET_UPVALUE) : {
       uint8_t slot = READ_BYTE();
       ObjUpvalue* upvalue = vm->frame->closure->upvalues[slot];
       // The user can never get an upvalue directly. Push its captured value
       // onto the stack instead.
       push(vm, *upvalue->location);
-      break;
+      DISPATCH();
     }
-    case OP_CLOSE_UPVALUE:
+
+    CASE_OP(CLOSE_UPVALUE) : {
       closeUpvalue(vm, vm->stackTop - 1);
       pop(vm);
-      break;
-    case OP_CALL: {
+      DISPATCH();
+    }
+
+    CASE_OP(CALL) : {
       uint8_t argCount = READ_BYTE();
       if (!callValue(vm, peek(vm, argCount + 1), argCount)) {
         return OBA_RESULT_RUNTIME_ERROR;
       }
-      break;
+      DISPATCH();
     }
-    case OP_CLOSURE: {
+
+    CASE_OP(CLOSURE) : {
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjClosure* closure = newClosure(vm, function);
       push(vm, OBJ_VAL(closure));
@@ -507,27 +596,40 @@ do {                                                                           \
           closure->upvalues[j] = vm->frame->closure->upvalues[slot];
         }
       }
-      break;
+      DISPATCH();
     }
-    case OP_RETURN:
+
+    CASE_OP(RETURN) : {
       return_(vm);
-      break;
-    case OP_POP:
+      DISPATCH();
+    }
+
+    CASE_OP(POP) : {
       pop(vm);
-      break;
-    case OP_DEBUG: {
+      DISPATCH();
+    }
+
+    CASE_OP(DEBUG) : {
       Value value = pop(vm);
       printValue(value);
       printf("\n");
-      break;
+      DISPATCH();
     }
-    case OP_EXIT:
+
+    CASE_OP(EXIT) : {
       // Pop the root closure off the stack.
       pop(vm);
       return OBA_RESULT_SUCCESS;
     }
   }
+
 #undef READ_BYTE
+#undef READ_SHORT
+#undef READ_CONSTANT
+#undef READ_STRING
+#undef BINARY_OP
+#undef CASE_OP
+#undef DISPATCH
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
