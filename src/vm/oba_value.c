@@ -221,6 +221,11 @@ void printValue(Value value) {
   case VAL_OBJ:
     printObject(value);
     break;
+  case VAL_NIL:
+    printf("nil");
+    break;
+  default:
+    return; // Unreachable
   }
 }
 

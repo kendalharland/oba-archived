@@ -1,10 +1,11 @@
 #ifndef oba_builtin_h
 #define oba_builtin_h
 
-#include "oba.h"
-#include "oba_value.h"
 #include <time.h>
 #include <unistd.h>
+
+#include "oba.h"
+#include "oba_value.h"
 
 // TODO(kendal): Support error reporting in natives.
 
@@ -30,10 +31,23 @@ Value readByteNative(ObaVM* vm, int argc, Value* argv) {
   return OBJ_VAL(copyString(vm, &byte, 1));
 }
 
+Value readLineNative(ObaVM* vm, int argc, Value* argv) {
+  char* line = NULL;
+  size_t length;
+  if (getline(&line, &length, stdin) == -1) {
+    return NIL_VAL;
+    // TODO: if (feof(stdin)) { /* nil */ }  else { /* error */ }
+  }
+  Value value = OBJ_VAL(copyString(vm, line, length));
+  free(line);
+  return value;
+}
+
 Builtin __builtins__[] = {
     {"__native_sleep", &sleepNative},
     {"__native_now", &nowNative},
     {"__native_read_byte", &readByteNative},
+    {"__native_read_line", &readLineNative},
     {NULL, NULL}, // Sentinel to mark the end of the array.
 };
 
