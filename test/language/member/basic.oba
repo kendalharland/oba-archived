@@ -1,0 +1,8 @@
+import "time"
+
+debug time::now // expect: <fn time::now>
+
+// Modules can be stored in variables.
+// Why?
+let timemod = time
+debug timemod::now // expect: <fn time::now>

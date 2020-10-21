@@ -1,0 +1,3 @@
+let x = 1
+
+debug x::foo // expect runtime error: Expected a module

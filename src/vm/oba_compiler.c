@@ -374,7 +374,7 @@ GrammarRule rules[] =  {
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
   /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
-  /* TOK_MEMBER     */ INFIX(PREC_MEMBER, member),
+  /* TOK_MEMBER    */ INFIX(PREC_MEMBER, member),
   /* TOK_IDENT     */ PREFIX(identifier),
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ PREFIX(string),
