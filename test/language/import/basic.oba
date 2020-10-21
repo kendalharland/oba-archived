@@ -2,4 +2,4 @@
 import "time"
 
 debug time::now // expect: <fn time::now>
-debug time::sleep(1) // expect: 0
+debug time::sleep // expect: <fn time::sleep>

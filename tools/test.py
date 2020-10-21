@@ -8,6 +8,7 @@ from subprocess import PIPE, Popen
 
 TEST_DIR = "test"
 
+STDIN_RE = re.compile("// stdin: ?(.*)")
 EXPECT_OUTPUT_RE = re.compile("// expect: ?(.*)")
 EXPECT_RUNTIME_ERROR_RE = re.compile("// expect runtime error: ?(.*)")
 EXPECT_COMPILE_ERROR_RE = re.compile("// expect compile error: ?(.*)")
@@ -56,23 +57,17 @@ def verify_expectations(expectations, output_lines, output_name):
 
 
 def run_test(oba, test_file):
-    # Get the test output.
-    test_args = [oba, test_file]
-    proc = Popen(test_args, stdin=PIPE, stderr=PIPE, stdout=PIPE)
-    stdout, stderr = proc.communicate()
-
-    try:
-        stdout = stdout.decode("utf-8").replace("\r\n", "\n")
-        stderr = stderr.decode("utf-8").replace("\r\n", "\n")
-    except:
-        return ["failed decoding output"]
-
     expected_outs = []
     expected_errs = []
+    stdin = ""
 
     # Parse the test expectations.
     with open(test_file, "r") as f:
         for line in f.readlines():
+            match = STDIN_RE.search(line)
+            if match:
+                stdin += match.group(1) + "\n"
+
             match = EXPECT_OUTPUT_RE.search(line)
             if match:
                 expected_outs.append(match.group(1))
@@ -89,6 +84,17 @@ def run_test(oba, test_file):
         raise TestError("Cannot expect both errors and output in the same test")
     if not expected_outs and not expected_errs:
         raise TestError("Test has no expectations")
+
+    # Get the test output.
+    test_args = [oba, test_file]
+    proc = Popen(test_args, stdin=PIPE, stderr=PIPE, stdout=PIPE)
+    stdout, stderr = proc.communicate(input=stdin.encode())
+
+    try:
+        stdout = stdout.decode("utf-8").replace("\r\n", "\n")
+        stderr = stderr.decode("utf-8").replace("\r\n", "\n")
+    except:
+        return ["failed decoding output"]
 
     if expected_outs:
         return verify_expectations(expected_outs, stdout.splitlines(), "stdout")

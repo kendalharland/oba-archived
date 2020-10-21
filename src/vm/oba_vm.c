@@ -91,7 +91,7 @@ static bool call(ObaVM* vm, ObjClosure* closure, int arity) {
 }
 
 static bool callNative(ObaVM* vm, NativeFn native, int arity) {
-  Value result = native(arity, vm->stackTop - arity);
+  Value result = native(vm, arity, vm->stackTop - arity);
   vm->stackTop -= arity;
   push(vm, result);
   return true;

@@ -38,6 +38,9 @@
 #define AS_UPVALUE(value) ((ObjUpvalue*)AS_OBJ(value))
 #define AS_MODULE(value) ((ObjModule*)AS_OBJ(value))
 
+// Singletions
+#define NIL_VAL ((Value){VAL_NIL, {0}})
+
 #define TABLE_MAX_LOAD 0.75
 
 // An Oba object in heap memory.
@@ -57,6 +60,7 @@ typedef struct Obj {
 
 // A tagged-union representing Oba values.
 typedef enum {
+  VAL_NIL,
   VAL_BOOL,
   VAL_NUMBER,
   VAL_OBJ,
@@ -85,7 +89,7 @@ typedef struct {
   uint32_t hash;
 } ObjString;
 
-typedef Value (*NativeFn)(int argc, Value* argv);
+typedef Value (*NativeFn)(ObaVM* vm, int argc, Value* argv);
 
 struct Builtin {
   const char* name;

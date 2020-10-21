@@ -1,0 +1,2 @@
+// stdin: a
+debug __native_read_byte() // expect: a
