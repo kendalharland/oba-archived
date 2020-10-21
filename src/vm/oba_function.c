@@ -2,10 +2,11 @@
 #include "oba_memory.h"
 #include "oba_value.h"
 
-ObjFunction* newFunction(ObaVM* vm) {
+ObjFunction* newFunction(ObaVM* vm, ObjModule* module) {
   ObjFunction* function = ALLOCATE_OBJ(vm, ObjFunction, OBJ_FUNCTION);
   initChunk(&function->chunk);
   function->arity = 0;
+  function->module = module;
   function->upvalueCount = 0;
   function->name = NULL;
 }

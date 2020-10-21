@@ -181,23 +181,37 @@ char* readFile(ObaVM* vm, const char* path) {
   return contents;
 }
 
-static Value resolveModule(ObaVM* vm, Value name) { return name; }
-
-ObjClosure* compileInModule(ObaVM* vm, Value name, const char* source) {
+// TODO(kendal): Allow the host application to resolve modules in its own way.
+static char* resolveModule(ObaVM* vm, Value name) {
+  // TODO(kendal): Precompile core modules as part of the VM.
   ObjString* path = AS_STRING(name);
-  ObjModule* module = newModule(vm, path->chars, path->length);
+
+  int pathLength = path->length + strlen("mod/.oba") + 1;
+  char* fullpath = malloc(pathLength);
+  sprintf(fullpath, "mod/%s.oba", path->chars);
+  fullpath[pathLength] = '\0';
+  return fullpath;
+}
+
+ObjClosure* compileInModule(ObaVM* vm, Value value, const char* source) {
+  ObjString* name = AS_STRING(value);
+  ObjModule* module = newModule(vm, name);
   ObjFunction* function = obaCompile(vm, module, source);
   if (function == NULL) {
     return NULL;
   }
+
+  // Store the module as a global variable of the current module.
+  tableSet(vm->frame->closure->function->module->variables, module->name,
+           OBJ_VAL(module));
   return newClosure(vm, function);
 }
 
 // TODO(kendal): If the module is already loaded, bail early.
+// TODO(kendal): Handle circular imports.
 static ObjClosure* importModule(ObaVM* vm, Value name) {
-  name = resolveModule(vm, name);
-
-  char* source = readFile(vm, AS_CSTRING(name));
+  char* path = resolveModule(vm, name);
+  char* source = readFile(vm, path);
 
   ObjClosure* moduleClosure = compileInModule(vm, name, source);
   if (moduleClosure == NULL) {
@@ -205,6 +219,7 @@ static ObjClosure* importModule(ObaVM* vm, Value name) {
     return NULL;
   }
 
+  FREE_ARRAY(char, path, strlen(path));
   FREE_ARRAY(char, source, strlen(source));
 
   return moduleClosure;
@@ -244,11 +259,12 @@ ObaVM* obaNewVM(Builtin* builtins, int builtinsLength) {
 
   vm->openUpvalues = NULL;
   vm->objects = NULL;
-  vm->globals = (Table*)realloc(NULL, sizeof(Table));
-  initTable(vm->globals);
-  resetStack(vm);
   vm->frame = vm->frames;
 
+  vm->globals = (Table*)realloc(NULL, sizeof(Table));
+  initTable(vm->globals);
+
+  resetStack(vm);
   registerBuiltins(vm, builtins, builtinsLength);
   return vm;
 }
@@ -260,7 +276,6 @@ static void freeObjects(ObaVM* vm) {
     freeObject(obj);
     obj = next;
   }
-  vm->objects = NULL;
 }
 
 void obaFreeVM(ObaVM* vm) {
@@ -268,7 +283,7 @@ void obaFreeVM(ObaVM* vm) {
   if (vm->frame->closure != NULL) {
     freeChunk(&vm->frame->closure->function->chunk);
   }
-  freeTable(vm->globals);
+  freeTable(vm->frame->closure->function->module->variables);
   freeObjects(vm);
   free(vm);
 }
@@ -497,7 +512,8 @@ do {                                                                           \
 
     CASE_OP(DEFINE_GLOBAL) : {
       ObjString* name = READ_STRING();
-      tableSet(vm->globals, name, peek(vm, 1));
+      tableSet(vm->frame->closure->function->module->variables, name,
+               peek(vm, 1));
       pop(vm);
       DISPATCH();
     }
@@ -505,9 +521,13 @@ do {                                                                           \
     CASE_OP(GET_GLOBAL) : {
       ObjString* name = READ_STRING();
       Value value;
-      if (!tableGet(vm->globals, name, &value)) {
-        runtimeError(vm, "Undefined variable: %s", name->chars);
-        return OBA_RESULT_RUNTIME_ERROR;
+
+      if (!tableGet(vm->frame->closure->function->module->variables, name,
+                    &value)) {
+        if (!tableGet(vm->globals, name, &value)) {
+          runtimeError(vm, "Undefined variable: %s", name->chars);
+          return OBA_RESULT_RUNTIME_ERROR;
+        }
       }
       push(vm, value);
       DISPATCH();
@@ -547,16 +567,14 @@ do {                                                                           \
       DISPATCH();
     }
 
-    /*
+    CASE_OP(GET_IMPORTED_VARIABLE) : {
+      Value receiver = pop(vm);
+      if (!IS_MODULE(receiver)) {
+        runtimeError(vm, "Expected a module");
+        return OBA_RESULT_RUNTIME_ERROR;
+      }
 
-       To make this code work:
-       1. Define ObjModule {variables table, name}
-       2. Add OP_GET_MODULE_VARIABLE.
-       3. Add support for compiling modules.
-       4. Refactor "globals" as module-level variables.
-
-    CASE_OP(GET_MODULE_VARIABLE) : {
-      ObjModule* module = AS_MODULE(pop(vm));
+      ObjModule* module = AS_MODULE(receiver);
       ObjString* name = READ_STRING();
       Value value;
       if (!tableGet(module->variables, name, &value)) {
@@ -567,8 +585,6 @@ do {                                                                           \
       push(vm, value);
       DISPATCH();
     }
-
-       */
 
     CASE_OP(CALL) : {
       uint8_t argCount = READ_BYTE();
@@ -615,6 +631,14 @@ do {                                                                           \
     CASE_OP(IMPORT_MODULE) : {
       ObjClosure* moduleClosure = importModule(vm, READ_CONSTANT());
       push(vm, OBJ_VAL(moduleClosure));
+      callValue(vm, OBJ_VAL(moduleClosure), 0);
+      DISPATCH();
+    }
+
+    CASE_OP(END_MODULE) : {
+      if (vm->frame - vm->frames > 1) {
+        return_(vm);
+      }
       DISPATCH();
     }
 
@@ -637,7 +661,7 @@ do {                                                                           \
 }
 
 ObaInterpretResult obaInterpret(ObaVM* vm, const char* source) {
-  ObjModule* module = newModule(vm, "main", 4);
+  ObjModule* module = newModule(vm, copyString(vm, "main", 4));
   ObjFunction* function = obaCompile(vm, module, source);
   if (function == NULL) {
     return OBA_RESULT_COMPILE_ERROR;

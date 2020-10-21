@@ -7,6 +7,96 @@
 #include "oba_value.h"
 #include "oba_vm.h"
 
+void printFunction(ObjFunction* function) {
+  if (function->name != NULL) {
+    printf("<fn %s::%s>", function->module->name->chars, function->name->chars);
+  } else {
+    // The function is still being compiled and this value is being printed
+    // while the function is on the stack, probably as a debugging message.
+    printf("<fn>");
+  }
+}
+
+void printObject(Value value) {
+  Obj* obj = AS_OBJ(value);
+  switch (obj->type) {
+  case OBJ_CLOSURE:
+    printFunction(AS_CLOSURE(value)->function);
+    break;
+  case OBJ_FUNCTION:
+    printFunction(AS_FUNCTION(value));
+    break;
+  case OBJ_STRING:
+    printf("%s", AS_CSTRING(value));
+    break;
+  case OBJ_NATIVE:
+    printf("<native fn>");
+    break;
+  case OBJ_UPVALUE:
+    printValue(*(AS_UPVALUE(value)->location));
+    break;
+  case OBJ_MODULE: {
+    ObjModule* module = (ObjModule*)obj;
+    printf("<module %s>", module->name->chars);
+    break;
+  }
+  default:
+    break; // Unreachable
+  }
+}
+
+Obj* allocateObject(ObaVM* vm, size_t size, ObjType type) {
+#ifdef DEBUG_TRACE_EXECUTION
+  printf("allocate object type: %d size %d\n", type, size);
+#endif
+  Obj* object = (Obj*)reallocate(NULL, 0, size);
+  object->type = type;
+  object->next = vm->objects;
+  vm->objects = object;
+  return object;
+}
+
+void freeObject(Obj* obj) {
+#ifdef DEBUG_TRACE_EXECUTION
+  printf("free object type: %d\n", obj->type);
+  printObject(OBJ_VAL(obj));
+  printf(" @ %p\n", obj);
+#endif
+
+  switch (obj->type) {
+  case OBJ_STRING: {
+    ObjString* string = (ObjString*)obj;
+    FREE_ARRAY(char, string->chars, string->length + 1);
+    FREE(ObjString, obj);
+    break;
+  }
+  case OBJ_NATIVE:
+    FREE(ObjNative, obj);
+    break;
+  case OBJ_FUNCTION: {
+    ObjFunction* function = (ObjFunction*)obj;
+    freeChunk(&function->chunk);
+    FREE(ObjFunction, obj);
+    break;
+  }
+  case OBJ_CLOSURE: {
+    ObjClosure* closure = (ObjClosure*)obj;
+    FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
+    FREE(ObjClosure, obj);
+    break;
+  }
+  case OBJ_UPVALUE:
+    FREE(ObjUpvalue, obj);
+    break;
+  case OBJ_MODULE: {
+    ObjModule* module = (ObjModule*)obj;
+    freeTable(module->variables);
+    FREE(ObjModule, obj);
+    break;
+  }
+  }
+}
+
 void initValueArray(ValueArray* array) {
   array->capacity = 0;
   array->count = 0;
@@ -27,14 +117,6 @@ void writeValueArray(ValueArray* array, Value value) {
 
   array->values[array->count] = value;
   array->count++;
-}
-
-Obj* allocateObject(ObaVM* vm, size_t size, ObjType type) {
-  Obj* object = (Obj*)reallocate(NULL, 0, size);
-  object->type = type;
-  object->next = vm->objects;
-  vm->objects = object;
-  return object;
 }
 
 // FNV-1a hash function
@@ -79,48 +161,12 @@ ObjNative* newNative(ObaVM* vm, NativeFn function) {
   return native;
 }
 
-ObjModule* newModule(ObaVM* vm, const char* path, int pathLength) {
+ObjModule* newModule(ObaVM* vm, ObjString* name) {
   ObjModule* module = ALLOCATE_OBJ(vm, ObjModule, OBJ_MODULE);
-  module->variables = (Table*)realloc(NULL, sizeof(Table));
+  module->name = name;
+  module->variables = (Table*)reallocate(NULL, 0, sizeof(Table));
   initTable(module->variables);
-  module->name = copyString(vm, path, pathLength);
   return module;
-}
-
-void freeObject(Obj* obj) {
-  switch (obj->type) {
-  case OBJ_STRING: {
-    ObjString* string = (ObjString*)obj;
-    FREE_ARRAY(char, string->chars, string->length + 1);
-    FREE(ObjString, obj);
-    break;
-  }
-  case OBJ_NATIVE:
-    FREE(ObjNative, obj);
-    break;
-  case OBJ_FUNCTION: {
-    ObjFunction* function = (ObjFunction*)obj;
-    freeChunk(&function->chunk);
-    FREE(ObjFunction, obj);
-    break;
-  }
-  case OBJ_CLOSURE: {
-    ObjClosure* closure = (ObjClosure*)obj;
-    FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
-    FREE(ObjClosure, obj);
-    break;
-  }
-  case OBJ_UPVALUE:
-    FREE(ObjUpvalue, obj);
-    break;
-  case OBJ_MODULE: {
-    ObjModule* module = (ObjModule*)obj;
-    freeObject((Obj*)module->name);
-    freeTable(module->variables);
-    FREE(ObjModule, obj);
-    break;
-  }
-  }
 }
 
 bool objectsEqual(Value ao, Value bo) {
@@ -161,29 +207,6 @@ bool valuesEqual(Value a, Value b) {
     return objectsEqual(a, b);
   default:
     return false; // Unreachable.
-  }
-}
-
-void printFunction(ObjFunction* function) { printf("%s", function->name); }
-
-void printObject(Value value) {
-  Obj* obj = AS_OBJ(value);
-  switch (obj->type) {
-  case OBJ_CLOSURE:
-    printFunction(AS_CLOSURE(value)->function);
-    break;
-  case OBJ_FUNCTION:
-    printFunction(AS_FUNCTION(value));
-    break;
-  case OBJ_STRING:
-    printf("%s", AS_CSTRING(value));
-    break;
-  case OBJ_NATIVE:
-    printf("<native fn>");
-    break;
-  case OBJ_UPVALUE:
-    printValue(*(AS_UPVALUE(value)->location));
-    break;
   }
 }
 

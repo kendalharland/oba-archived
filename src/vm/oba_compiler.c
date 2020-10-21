@@ -64,7 +64,7 @@ void initCompiler(ObaVM* vm, Compiler* compiler, Parser* parser,
   compiler->parser = parser;
   compiler->localCount = 0;
   compiler->currentDepth = 0;
-  compiler->function = newFunction(vm);
+  compiler->function = newFunction(vm, parser->module);
 }
 
 static void printError(Compiler* compiler, const char* label,
@@ -107,6 +107,7 @@ static void grouping(Compiler*, bool);
 static void unaryOp(Compiler*, bool);
 static void infixOp(Compiler*, bool);
 static void identifier(Compiler*, bool);
+static void member(Compiler*, bool);
 static void literal(Compiler*, bool);
 static void string(Compiler*, bool);
 static void matchExpr(Compiler*, bool);
@@ -320,6 +321,7 @@ typedef enum {
   PREC_COND,    // < > <= >= != ==
   PREC_SUM,     // + -
   PREC_PRODUCT, // * /
+  PREC_MEMBER,  // ::
 } Precedence;
 
 typedef void (*GrammarFn)(Compiler*, bool canAssign);
@@ -349,6 +351,7 @@ typedef struct {
 // See: http://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
 #define UNUSED                     { NULL, NULL, PREC_NONE, NULL }
 #define PREFIX(fn)                 { fn, NULL, PREC_NONE, NULL }
+#define INFIX(prec, fn)            { NULL, fn, prec, NULL }
 #define INFIX_OPERATOR(prec, name) { NULL, infixOp, prec, name }
 
 GrammarRule rules[] =  {
@@ -371,6 +374,7 @@ GrammarRule rules[] =  {
   /* TOK_MINUS     */ INFIX_OPERATOR(PREC_SUM, "-"),
   /* TOK_MULTIPLY  */ INFIX_OPERATOR(PREC_PRODUCT, "*"),
   /* TOK_DIVIDE    */ INFIX_OPERATOR(PREC_PRODUCT, "/"),
+  /* TOK_MEMBER     */ INFIX(PREC_MEMBER, member),
   /* TOK_IDENT     */ PREFIX(identifier),
   /* TOK_NUMBER    */ PREFIX(literal),
   /* TOK_STRING    */ PREFIX(string),
@@ -585,6 +589,12 @@ static void nextToken(Compiler* compiler) {
     case '"':
       readString(compiler);
       return;
+    case ':':
+      if (matchChar(compiler, ':')) {
+        makeToken(compiler, TOK_MEMBER);
+        return;
+      }
+      // Fallthrough to error handler.
     default:
       if (isName(c)) {
         readName(compiler);
@@ -921,7 +931,6 @@ static uint8_t argumentList(Compiler* compiler) {
 }
 
 static void functionCall(Compiler* compiler, bool canAssign) {
-  variable(compiler, canAssign);
   consume(compiler, TOK_LPAREN, "Expected '(' before parameter list");
   uint8_t argCount = argumentList(compiler);
   consume(compiler, TOK_RPAREN, "Expected ')' after parameter list");
@@ -930,11 +939,27 @@ static void functionCall(Compiler* compiler, bool canAssign) {
 }
 
 static void identifier(Compiler* compiler, bool canAssign) {
+  variable(compiler, canAssign);
   if (peek(compiler) == TOK_LPAREN) {
     functionCall(compiler, canAssign);
-    return;
   }
-  variable(compiler, canAssign);
+}
+
+static void member(Compiler* compiler, bool canAssign) {
+  nextToken(compiler);
+  Token token = compiler->parser->previous;
+
+  // TODO(kendal) It feels like either identifier() or variable() should be able
+  // to handle this case, and member() should not be needed. Find a way to merge
+  // them.
+  Value value = OBJ_VAL(copyString(compiler->vm, token.start, token.length));
+  int arg = addConstant(compiler, value);
+  emitOp(compiler, OP_GET_IMPORTED_VARIABLE);
+  emitByte(compiler, (uint8_t)arg);
+
+  if (peek(compiler) == TOK_LPAREN) {
+    functionCall(compiler, canAssign);
+  }
 }
 
 // TODO(kjharland): Support variable patterns.
@@ -1095,8 +1120,11 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
     return NULL;
   }
 
-  // Make sure we don't leave the parent compiler's parser "behind".
-  if (compiler->parent != NULL) {
+  if (compiler->parent == NULL) {
+    emitOp(compiler, OP_END_MODULE);
+  } else {
+    // Make sure we don't leave the parent compiler's parser "behind".
+
     // TODO(kendal): Consider just keeping a stack of compilers on the VM,
     // which would also prevent us from having to fixup the VM's ip and frame
     // before executing the compiled code.
@@ -1107,6 +1135,10 @@ ObjFunction* endCompiler(Compiler* compiler, const char* debugName,
     emitOp(compiler, OP_RETURN);
   }
 
+  // There is always an OP_END_MODULE or OP_RETURN instruction before this.
+  // It is only reached when the module we just compiled is not the "main"
+  // module.
+  emitOp(compiler, OP_EXIT);
   return compiler->function;
 }
 
@@ -1142,7 +1174,6 @@ ObjFunction* compile(ObaVM* vm, ObjModule* module, const char* source,
       break;
     }
   }
-  emitOp(&compiler, OP_EXIT);
 
   return endCompiler(&compiler, name, nameLength);
 }

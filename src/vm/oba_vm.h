@@ -17,10 +17,15 @@ struct ObaVM {
 
   Value stack[STACK_MAX];
   Value* stackTop;
+
+  // Global values available to all modules.
+  //
+  // Builtins are defined here. When searching for a global, the VM first checks
+  // the current module, then this table.
   Table* globals;
+
   Table* modules;
   ObjUpvalue* openUpvalues;
-
   Obj* objects;
 };
 

@@ -30,15 +30,15 @@ format:
 	@echo "==== Formatting tools ===="
 	black tools/
 
-oba:
+oba: clean
 	@echo "==== Building oba ($(config)) ===="
 	$(CC) $(ALL_CFLAGS) ./src/main.c ./src/vm/*.c
 
-run: clean oba
+run: oba
 	@echo "==== Running oba ($(config)) ===="
 	./oba 
 
-test: clean oba
+test: oba
 	@echo "==== Testing oba ($(config)) ===="
 	python3 tools/test.py
 

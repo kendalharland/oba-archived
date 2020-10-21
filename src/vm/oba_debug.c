@@ -88,6 +88,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return byteInstruction("OP_GET_UPVALUE", chunk, offset);
   case OP_CLOSE_UPVALUE:
     return simpleInstruction("OP_CLOSE_UPVALUE", chunk, offset);
+  case OP_GET_IMPORTED_VARIABLE:
+    return constantInstruction("OP_GET_IMPORTED_VARIABLE", chunk, offset);
   case OP_POP:
     return simpleInstruction("OP_POP", chunk, offset);
   case OP_JUMP:
@@ -124,6 +126,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     return simpleInstruction("OP_DEBUG", chunk, offset);
   case OP_IMPORT_MODULE:
     return simpleInstruction("OP_IMPORT_MODULE", chunk, offset);
+  case OP_END_MODULE:
+    return simpleInstruction("OP_END_MODULE", chunk, offset);
   case OP_EXIT:
     return simpleInstruction("OP_EXIT", chunk, offset);
   default:

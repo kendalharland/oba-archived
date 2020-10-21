@@ -1,4 +1,5 @@
 // Tests need to be run from the project root for this to work.
-import "mod/time.oba"
+import "time"
 
-debug now()
+debug time::now // expect: <fn time::now>
+debug time::sleep(1) // expect: 0

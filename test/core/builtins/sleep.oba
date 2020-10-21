@@ -1,2 +1,2 @@
 // expect: 0
-debug sleep(1)
+debug __native_sleep(1)

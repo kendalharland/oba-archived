@@ -22,6 +22,8 @@
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 #define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_NATIVE(value) isObjType(value, OBJ_NATIVE)
+#define IS_UPVALUE(value) isObjType(value, OBJ_UPVALUE)
+#define IS_MODULE(value) isObjType(value, OBJ_MODULE)
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 // Macros for converting from Oba to C.
@@ -34,6 +36,7 @@
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 #define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
 #define AS_UPVALUE(value) ((ObjUpvalue*)AS_OBJ(value))
+#define AS_MODULE(value) ((ObjModule*)AS_OBJ(value))
 
 #define TABLE_MAX_LOAD 0.75
 
@@ -135,7 +138,7 @@ ObjString* takeString(ObaVM* vm, char* chars, int length);
 
 ObjNative* newNative(ObaVM*, NativeFn);
 
-ObjModule* newModule(ObaVM* vm, const char* path, int pathLength);
+ObjModule* newModule(ObaVM* vm, ObjString* name);
 
 void initTable(Table* table);
 void freeTable(Table* table);

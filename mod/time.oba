@@ -1,4 +1,10 @@
+// Now returns the time in seconds since the program started running.
 fn now {
-  1
+  __native_now()
+}
+
+// Sleep makes the calling thread sleep until seconds have elapsed.
+fn sleep seconds {
+ __native_sleep(seconds)
 }
 
