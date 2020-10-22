@@ -1,2 +1,0 @@
-// expect: You can concatenate strings
-debug "You " + "can " + "concatenate " + "strings"

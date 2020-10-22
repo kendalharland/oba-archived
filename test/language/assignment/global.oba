@@ -1,4 +1,0 @@
-// expect: 20
-let x = 20
-debug x
-

@@ -1,4 +1,0 @@
-// expect runtime error: Expected 2 arguments but got 1
-fn mul a b = a * b
-
-debug mul(2)

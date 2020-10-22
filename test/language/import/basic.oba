@@ -1,5 +1,0 @@
-// Tests need to be run from the project root for this to work.
-import "time"
-
-debug time::now // expect: <fn time::now>
-debug time::sleep // expect: <fn time::sleep>

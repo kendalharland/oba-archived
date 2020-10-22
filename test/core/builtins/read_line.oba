@@ -1,6 +1,0 @@
-// stdin: this is the first line
-// stdin: this is the second line
-debug __native_read_line() // expect: this is the first line
-                           // expect: 
-debug __native_read_line() // expect: this is the second line
-                           // expect:

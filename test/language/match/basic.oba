@@ -1,3 +1,0 @@
-let value = match "a" | "a" = "a" | "b" = "b" | "c" = "c";
-debug value // expect: a
-

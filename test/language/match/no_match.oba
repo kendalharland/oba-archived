@@ -1,3 +1,0 @@
-// expect runtime error: Match expression evaluated to nothing
-let val = match 0 | 1 = 1;
-debug val

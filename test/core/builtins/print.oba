@@ -1,9 +1,0 @@
-__native_print("hello") // expect: hello
-__native_print(1) // expect: 1
-
-fn x = 1
-__native_print(x) // expect: <fn main::x>
-__native_print(x()) // expect: 1
-
-__native_print(true) // expect: true
-__native_print(false) // expect: false

@@ -1,2 +1,0 @@
-// expect: ab
-debug "a" +  match true | true = "b" | false = "c";

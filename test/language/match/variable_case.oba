@@ -1,3 +1,0 @@
-let var = 2
-let val = match var | 0 = 0 | 1 = 1 | var = var;
-debug val == var // expect: true

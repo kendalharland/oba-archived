@@ -1,2 +1,0 @@
-fn niladic = "niladic"
-debug niladic() // expect: niladic
