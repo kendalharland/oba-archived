@@ -8,5 +8,7 @@ Dependencies:
 
 Development Dependencies:
 - [black] - For formatting tools
+- [hugo] - For generating documentation
 
 [black]: https://black.readthedocs.io/en/stable/installation_and_usage.html#installation
+[hugo]: https://github.com/gohugoio/hugo/releases
